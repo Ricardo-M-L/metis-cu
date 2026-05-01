@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Ricardo-M-L/metis-cu/security/advisories/new
+    about: Please report security issues privately, not via public issues. See SECURITY.md.
+  - name: metis main repo
+    url: https://github.com/Ricardo-M-L/metis/issues
+    about: Issues with metis itself (not the computer-use sub-binary) belong in the main repo.

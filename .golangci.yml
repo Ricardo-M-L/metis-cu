@@ -1,0 +1,27 @@
+# golangci-lint config for metis-cu.
+# Mirrors metis's setup so contributors can use one editor profile.
+
+run:
+  timeout: 3m
+  go: "1.23"
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - gofmt
+
+linters-settings:
+  misspell:
+    locale: US
+
+issues:
+  exclude-dirs:
+    - dist
+    - vendor
+  max-same-issues: 0
