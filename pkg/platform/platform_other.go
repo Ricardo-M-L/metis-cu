@@ -1,12 +1,14 @@
-//go:build !darwin
+//go:build !darwin && !linux && !windows
 
 package platform
 
 import "image"
 
-// Stub for non-macOS until Sprint 4 adds Linux (X11/Wayland) and
-// Windows (SendInput / GDI). New() succeeds so the binary still
-// boots and reports "not implemented on this platform" per call.
+// Stub fallback for unsupported OSes (freebsd / openbsd / dragonfly /
+// solaris / etc.). darwin / linux / windows have full implementations
+// in their own platform_<goos>_*.go files. New() succeeds so the binary
+// still boots and reports "not implemented on this platform" per call,
+// keeping CI / cross-builds happy on platforms we haven't certified.
 
 type stubPlatform struct{}
 
@@ -39,7 +41,11 @@ func (p *stubPlatform) ClipboardRead() (string, error)   { return "", ErrNotImpl
 func (p *stubPlatform) ClipboardWrite(text string) error { return ErrNotImplemented }
 
 // application
-func (p *stubPlatform) OpenApplication(name string) error                                  { return ErrNotImplemented }
-func (p *stubPlatform) GrantedApplications() ([]string, error)                             { return nil, ErrNotImplemented }
-func (p *stubPlatform) RequestAccess(apps []string) (map[string]AccessTier, error)         { return nil, ErrNotImplemented }
-func (p *stubPlatform) FrontmostApp() (string, AccessTier, error)                          { return "", TierFull, ErrNotImplemented }
+func (p *stubPlatform) OpenApplication(name string) error      { return ErrNotImplemented }
+func (p *stubPlatform) GrantedApplications() ([]string, error) { return nil, ErrNotImplemented }
+func (p *stubPlatform) RequestAccess(apps []string) (map[string]AccessTier, error) {
+	return nil, ErrNotImplemented
+}
+func (p *stubPlatform) FrontmostApp() (string, AccessTier, error) {
+	return "", TierFull, ErrNotImplemented
+}

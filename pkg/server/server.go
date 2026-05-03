@@ -8,20 +8,26 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/Ricardo-M-L/metis-cu/pkg/platform"
 	"github.com/Ricardo-M-L/metis-cu/pkg/tools"
+	"github.com/mark3labs/mcp-go/mcp"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 )
+
+// Version is wired in from main at build time so tests can construct
+// servers without depending on the main package.
+var Version = "0.0.0-test"
 
 // Options controls runtime behavior. Kept separate from MCP-protocol
 // internals so future flags (debug log path, sandbox mode, frontmost-app
 // tier overrides) don't leak into the wire layer.
 type Options struct {
 	// Debug toggles RPC frame logging to ~/.metis-cu/debug.log. Useful
-	// when chasing "tool reported wrong coords" type issues — the log
-	// captures both the caller-supplied params and the dispatched
-	// platform call.
+	// when chasing "tool reported wrong coords" type issues. Currently
+	// a no-op pending sprint-3 instrumentation.
 	Debug bool
 }
 
@@ -30,23 +36,87 @@ type Options struct {
 // implementation is selected at compile time via build tags in
 // pkg/platform/platform_<goos>.go.
 func Run(opts Options) error {
+	srv, _, err := build(opts)
+	if err != nil {
+		return err
+	}
+	return mcpserver.ServeStdio(srv)
+}
+
+// build constructs the *MCPServer with all 24 tools registered and a
+// matching Registry. Splitting it from Run lets tests spin up an
+// in-process client against the same server without touching stdio.
+func build(opts Options) (*mcpserver.MCPServer, *tools.Registry, error) {
 	plat, err := platform.New()
 	if err != nil {
-		return fmt.Errorf("platform init: %w", err)
+		return nil, nil, fmt.Errorf("platform init: %w", err)
 	}
-	defer plat.Close()
 
 	reg := tools.NewRegistry(plat)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	srv := mcpserver.NewMCPServer(
+		"metis-cu",
+		Version,
+		mcpserver.WithToolCapabilities(false),
+	)
 
-	// TODO sprint-1 placeholder: real implementation will use
-	// github.com/mark3labs/mcp-go to handle the JSON-RPC framing. For
-	// now we just wire the registry through and exit so `go build`
-	// succeeds end-to-end.
-	_ = ctx
-	_ = reg
-	_ = opts.Debug
-	return fmt.Errorf("MCP stdio loop not implemented yet — see TODO in pkg/server/server.go")
+	for _, spec := range reg.Specs() {
+		spec := spec // capture for closure
+		schemaBytes, err := json.Marshal(spec.Schema)
+		if err != nil {
+			return nil, nil, fmt.Errorf("marshal schema for %s: %w", spec.Name, err)
+		}
+		// Construct mcp.Tool directly (instead of mcp.NewTool) so we
+		// can supply RawInputSchema without conflicting with the
+		// default object InputSchema that NewTool would otherwise
+		// install. See mcp/tools.go:Tool.MarshalJSON for the conflict
+		// check.
+		tool := mcp.Tool{
+			Name:           spec.Name,
+			Description:    spec.Description,
+			RawInputSchema: schemaBytes,
+		}
+		srv.AddTool(tool, makeHandler(reg, spec.Name))
+	}
+
+	_ = opts.Debug // reserved for future RPC frame logging
+	return srv, reg, nil
+}
+
+// makeHandler binds one tool name to a closure that pulls arguments
+// off the CallToolRequest, dispatches via reg.Call, and shapes the
+// tools.Result into mcp-go's CallToolResult (text-only or text+image).
+func makeHandler(reg *tools.Registry, name string) mcpserver.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		res, err := reg.Call(ctx, name, args)
+		if err != nil {
+			// Transport-level error — wire as an isError result so the
+			// LLM sees and self-corrects rather than the request hard-
+			// failing at the protocol layer.
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		if res == nil {
+			return mcp.NewToolResultError("tool returned nil result"), nil
+		}
+		return resultToMCP(res), nil
+	}
+}
+
+// resultToMCP packs a tools.Result into mcp-go's CallToolResult. Image
+// results carry both the descriptive Text and the base64 Image (so MCP
+// clients that ignore image blocks still see "captured 1280x800 PNG"
+// or similar). Errors set IsError=true on the result.
+func resultToMCP(r *tools.Result) *mcp.CallToolResult {
+	if r.IsError {
+		return mcp.NewToolResultError(r.Text)
+	}
+	if r.Image != "" {
+		mime := r.MIMEType
+		if mime == "" {
+			mime = "image/png"
+		}
+		return mcp.NewToolResultImage(r.Text, r.Image, mime)
+	}
+	return mcp.NewToolResultText(r.Text)
 }

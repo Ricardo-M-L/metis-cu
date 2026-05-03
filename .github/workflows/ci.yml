@@ -17,9 +17,13 @@ jobs:
       fail-fast: false
       matrix:
         # cgo deps (robotgo, screenshot) require platform SDKs — Linux
-        # needs x11 dev headers, Windows needs mingw. Ubuntu host has
-        # the X11 headers preinstalled in the GitHub-hosted image.
-        os: [ubuntu-latest, macos-latest]
+        # needs x11 dev headers (installed below), Windows uses the
+        # mingw toolchain that setup-go ships, macOS uses the system
+        # frameworks. Tests gated on a GUI session use Skip in -short
+        # mode; CI here runs without -short, so headless runners still
+        # exercise the platform-specific input paths via the real OS
+        # APIs (where available).
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 

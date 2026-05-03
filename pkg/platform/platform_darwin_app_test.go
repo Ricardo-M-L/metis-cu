@@ -1,0 +1,123 @@
+//go:build darwin
+
+package platform
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// TestFrontmostApp_NonEmpty verifies the osascript invocation works
+// against a real macOS GUI session. Skips when osascript can't reach
+// System Events (typical on CI runners with no logged-in window
+// server) — we only assert basic shape, not a specific app name, since
+// the active app at test time depends on what the user is doing.
+func TestFrontmostApp_NonEmpty(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("skipping FrontmostApp test in CI (no GUI session)")
+	}
+	p, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	name, tier, err := p.FrontmostApp()
+	if err != nil {
+		t.Skipf("frontmost lookup unavailable: %v", err)
+	}
+	if name == "" {
+		t.Fatal("FrontmostApp returned empty name with no error")
+	}
+	switch tier {
+	case TierRead, TierClick, TierFull:
+		// ok
+	default:
+		t.Fatalf("FrontmostApp returned unknown tier %q for app %q", tier, name)
+	}
+}
+
+// TestGrantedApplications_ContainsDefaults runs without requiring a
+// macOS GUI — GrantedApplications just unions the in-process maps.
+// Asserts the hard-coded default list survives the call (Safari is
+// stable for the duration of the project).
+func TestGrantedApplications_ContainsDefaults(t *testing.T) {
+	// Use a clean HOME so we don't get cross-test contamination.
+	t.Setenv("HOME", t.TempDir())
+	resetGrantedForTest()
+	p, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	apps, err := p.GrantedApplications()
+	if err != nil {
+		t.Fatalf("GrantedApplications: %v", err)
+	}
+	if !contains(apps, "Safari") {
+		t.Fatalf("GrantedApplications missing default %q; got %v", "Safari", apps)
+	}
+	if !contains(apps, "Terminal") {
+		t.Fatalf("GrantedApplications missing default %q; got %v", "Terminal", apps)
+	}
+	// Sorted alphabetically.
+	for i := 1; i < len(apps); i++ {
+		if apps[i-1] > apps[i] {
+			t.Fatalf("GrantedApplications not sorted: %v", apps)
+		}
+	}
+}
+
+// TestRequestAccess_AddsAndPersists verifies the in-memory record plus
+// the JSON persistence side-effect. Uses t.Setenv to point HOME at a
+// temp dir so we don't pollute the real user's $HOME/.metis-cu.
+func TestRequestAccess_AddsAndPersists(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	resetGrantedForTest()
+	p, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	got, err := p.RequestAccess([]string{"TestApp1", "TestApp2"})
+	if err != nil {
+		t.Fatalf("RequestAccess: %v", err)
+	}
+	if got["TestApp1"] != TierFull || got["TestApp2"] != TierFull {
+		t.Fatalf("RequestAccess returned unexpected tiers: %v", got)
+	}
+	apps, err := p.GrantedApplications()
+	if err != nil {
+		t.Fatalf("GrantedApplications: %v", err)
+	}
+	if !contains(apps, "TestApp1") {
+		t.Fatalf("GrantedApplications missing TestApp1 after RequestAccess; got %v", apps)
+	}
+	if !contains(apps, "TestApp2") {
+		t.Fatalf("GrantedApplications missing TestApp2 after RequestAccess; got %v", apps)
+	}
+	// Verify persistence file shape.
+	path := filepath.Join(tempHome, ".metis-cu", "granted.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("expected granted.json at %s: %v", path, err)
+	}
+	var wire map[string]string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatalf("granted.json malformed: %v\n%s", err, string(data))
+	}
+	if wire["TestApp1"] != string(TierFull) {
+		t.Fatalf("granted.json missing TestApp1=full; got %v", wire)
+	}
+	if wire["TestApp2"] != string(TierFull) {
+		t.Fatalf("granted.json missing TestApp2=full; got %v", wire)
+	}
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
+}

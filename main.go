@@ -33,6 +33,8 @@ import (
 const Version = "0.0.1-dev"
 
 func main() {
+	server.Version = Version
+
 	debug := flag.Bool("debug", false, "log MCP RPC frames to ~/.metis-cu/debug.log")
 	version := flag.Bool("version", false, "print version and exit")
 	flag.Parse()

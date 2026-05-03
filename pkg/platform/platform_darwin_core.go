@@ -1,0 +1,76 @@
+//go:build darwin
+
+package platform
+
+import (
+	"fmt"
+	"image"
+
+	"github.com/kbinani/screenshot"
+)
+
+// macOS implementation lives in five sibling files (split for parallel
+// authorship — each Sprint 2 sub-task owns one file):
+//   - platform_darwin_core.go       (this) — vision + lifecycle
+//   - platform_darwin_mouse.go      — pointer events
+//   - platform_darwin_keyboard.go   — key events + text input
+//   - platform_darwin_clipboard.go  — NSPasteboard read/write
+//   - platform_darwin_app.go        — NSWorkspace open + frontmost app
+//
+// Real implementations land per-file as PRs merge; methods left
+// stubbed return ErrNotImplemented so MCP clients see a clear
+// "not implemented" error rather than a panic or silent zero.
+
+type darwinPlatform struct {
+	activeDisplay int
+}
+
+// New returns the platform implementation for the current GOOS.
+func New() (Platform, error) { return &darwinPlatform{activeDisplay: 0}, nil }
+
+func (p *darwinPlatform) Close() error { return nil }
+
+// Screenshot captures the current active display via macOS CGImage. Returns
+// the raw image — encoding to PNG/JPEG is the caller's responsibility (the
+// MCP wire format expects base64-encoded PNG). Errors when display index is
+// out of range or screen-capture access has not been granted by the user
+// (System Settings → Privacy & Security → Screen Recording).
+func (p *darwinPlatform) Screenshot() (image.Image, error) {
+	n := screenshot.NumActiveDisplays()
+	if n <= 0 {
+		return nil, fmt.Errorf("no active displays found (screen capture access may be required)")
+	}
+	idx := p.activeDisplay
+	if idx < 0 || idx >= n {
+		idx = 0
+	}
+	bounds := screenshot.GetDisplayBounds(idx)
+	img, err := screenshot.CaptureRect(bounds)
+	if err != nil {
+		return nil, fmt.Errorf("capture display %d: %w", idx, err)
+	}
+	return img, nil
+}
+
+// DisplayCount returns the number of attached active displays. Required for
+// SwitchDisplay range validation and for the MCP `switch_display` tool's
+// "list available monitors" branch.
+func (p *darwinPlatform) DisplayCount() (int, error) {
+	n := screenshot.NumActiveDisplays()
+	if n <= 0 {
+		return 0, fmt.Errorf("no active displays found (screen capture access may be required)")
+	}
+	return n, nil
+}
+
+// SwitchDisplay sets which display Screenshot will capture next. Index is
+// 0-based; use DisplayCount to enumerate. Validates against active count
+// rather than silently clamping so the caller can surface the error.
+func (p *darwinPlatform) SwitchDisplay(idx int) error {
+	n := screenshot.NumActiveDisplays()
+	if idx < 0 || idx >= n {
+		return fmt.Errorf("display %d out of range (have %d)", idx, n)
+	}
+	p.activeDisplay = idx
+	return nil
+}
