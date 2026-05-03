@@ -1,0 +1,11 @@
+# Force LF line endings for Go source so gofmt is happy on Windows
+# checkouts (default core.autocrlf on Windows would otherwise convert
+# LF → CRLF and gofmt would flag every file as "unformatted").
+*.go        text eol=lf
+*.mod       text eol=lf
+*.sum       text eol=lf
+*.toml      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.md        text eol=lf
+Makefile    text eol=lf
