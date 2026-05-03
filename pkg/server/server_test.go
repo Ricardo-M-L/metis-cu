@@ -83,10 +83,21 @@ func TestE2E_ListsAll24Tools(t *testing.T) {
 }
 
 // TestE2E_Screenshot exercises the full call path (client → mcp-go
-// transport → server → tools.Registry → platform.Screenshot) for the
-// one fully-implemented tool in Phase 1. On macOS we expect an image
-// content block; on other OSes the stub platform returns
-// ErrNotImplemented, which the handler surfaces as IsError=true.
+// transport → server → tools.Registry → platform.Screenshot). All
+// three first-class platforms (darwin / linux / windows) now have real
+// implementations, so the response shape depends on the runner's GUI
+// state rather than the build:
+//
+//   - GUI session present (dev box, Windows CI runner): expect an
+//     ImageContent block with PNG data.
+//   - Headless / permission-denied (Linux CI without DISPLAY, macOS CI
+//     without Screen Recording permission): expect IsError so the LLM
+//     can self-correct.
+//
+// In either case the wiring is proven out — what we're really
+// regression-testing is that mcp-go round-trips through tools.Registry
+// without dropping the result. Both branches accept that; only a
+// transport-level error fails the test.
 func TestE2E_Screenshot(t *testing.T) {
 	c, ctx := startInProcessClient(t)
 
@@ -98,29 +109,31 @@ func TestE2E_Screenshot(t *testing.T) {
 		t.Fatalf("CallTool screenshot: %v", err)
 	}
 
-	if runtime.GOOS != "darwin" {
-		// Fallback platform stub returns ErrNotImplemented; handler
-		// wraps that as an isError result so the LLM can see it.
+	if testing.Short() {
+		t.Skip("skipping real screenshot capture in short mode")
+	}
+
+	// Non-supported OS (freebsd / openbsd) hit the stub fallback
+	// (platform_other.go); IsError is the only valid outcome there.
+	switch runtime.GOOS {
+	case "darwin", "linux", "windows":
+		// fall through to the GUI-session-aware checks below
+	default:
 		if !resp.IsError {
-			t.Fatalf("expected IsError on non-darwin (stub platform), got: %+v", resp)
+			t.Fatalf("expected IsError on stub platform %s, got: %+v", runtime.GOOS, resp)
 		}
 		return
 	}
 
-	// Real macOS: skip on CI (no Screen Recording permission, headless
-	// runners) but if a permission was granted we expect real image
-	// content.
-	if testing.Short() {
-		t.Skip("skipping real screenshot capture in short mode")
-	}
 	if resp.IsError {
-		// On a dev box without Screen Recording permission this also
-		// surfaces as IsError. Don't fail the test — the wiring still
-		// proved out (server actually tried to capture and got a
-		// platform-level error). Just record the message for context.
-		t.Logf("screenshot returned error (likely missing permission): %s", textOf(resp))
+		// Headless runner (no DISPLAY) or permission denied (no Screen
+		// Recording entitlement) — the wiring still proved out; the
+		// server actually tried to capture and got a platform-level
+		// error that propagated through MCP. Log for context.
+		t.Logf("screenshot returned error (headless / permission denied likely): %s", textOf(resp))
 		return
 	}
+
 	var sawImage bool
 	for _, blk := range resp.Content {
 		if img, ok := blk.(mcp.ImageContent); ok {
