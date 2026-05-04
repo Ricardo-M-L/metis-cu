@@ -16,11 +16,7 @@ func init() {
 				"frontmost-app context. Apps without explicit user grants fall back to " +
 				"the hard-coded default classification (browsers→read, terminals/IDEs→" +
 				"click, everything else→full). Use `request_access` to add or override.",
-			Schema: map[string]any{
-				"type":                 "object",
-				"properties":           map[string]any{},
-				"additionalProperties": false,
-			},
+			Schema:  noArgsSchema(),
 			Handler: handleListGrantedApplications,
 		})
 	})

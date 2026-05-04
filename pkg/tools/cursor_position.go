@@ -14,11 +14,7 @@ func init() {
 			Description: "Return the current mouse cursor location in logical pixels " +
 				"(top-left origin, matches `screenshot` coordinates). No tier gate — " +
 				"reading the cursor position is a vision operation, not input.",
-			Schema: map[string]any{
-				"type":                 "object",
-				"properties":           map[string]any{},
-				"additionalProperties": false,
-			},
+			Schema:  noArgsSchema(),
 			Handler: handleCursorPosition,
 		})
 	})

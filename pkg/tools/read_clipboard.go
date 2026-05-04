@@ -14,11 +14,7 @@ func init() {
 			Description: "Read the system clipboard. Returns the current text " +
 				"content, or an empty string if the clipboard is empty or holds " +
 				"non-text data.",
-			Schema: map[string]any{
-				"type":                 "object",
-				"properties":           map[string]any{},
-				"additionalProperties": false,
-			},
+			Schema:  noArgsSchema(),
 			Handler: handleReadClipboard,
 		})
 	})
