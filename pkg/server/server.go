@@ -43,12 +43,24 @@ type Options struct {
 // released cleanly on EOF. Without this, restarting the server in
 // the same process — common in tests and embedded use — could
 // reuse stale handles and produce confusing "no display" errors.
+//
+// If the user opted into [failsafe] enabled = true, Run also starts
+// the corner-exit watchdog goroutine; cancelled on EOF so it doesn't
+// outlive the parent process.
 func Run(opts Options) error {
 	srv, reg, err := build(opts)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = reg.Platform().Close() }()
+	cfg, _ := LoadConfig()
+	stopFailsafe := startFailsafeWatchdog(reg.Platform(), failsafeConfig{
+		enabled:  cfg.Failsafe.Enabled,
+		pollMs:   cfg.Failsafe.PollMs,
+		holdMs:   cfg.Failsafe.HoldMs,
+		cornerPx: cfg.Failsafe.CornerPx,
+	})
+	defer stopFailsafe()
 	return mcpserver.ServeStdio(srv)
 }
 

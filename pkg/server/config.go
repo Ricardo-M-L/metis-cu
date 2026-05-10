@@ -27,6 +27,18 @@ type Config struct {
 	Mouse      MouseConfig      `toml:"mouse"`
 	Gate       GateConfig       `toml:"gate"`
 	Limits     LimitsConfig     `toml:"limits"`
+	Failsafe   FailsafeConfig   `toml:"failsafe"`
+}
+
+// FailsafeConfig — opt-in corner-exit kill switch (Tier-1 borrow from
+// open-interpreter). Disabled by default; the rest of the project
+// avoids surprise process-killers. Enable when you want a physical-
+// world stop button independent of the model loop.
+type FailsafeConfig struct {
+	Enabled  bool `toml:"enabled"`
+	PollMs   int  `toml:"poll_ms"`
+	HoldMs   int  `toml:"hold_ms"`
+	CornerPx int  `toml:"corner_px"`
 }
 
 // ScreenshotConfig caps the per-call PNG dimensions before base64
