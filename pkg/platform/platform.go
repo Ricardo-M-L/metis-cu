@@ -59,6 +59,18 @@ type ClipboardSnapshot struct {
 	Empty bool // true when the source clipboard had no readable text
 }
 
+// OCRResult is one recognised text region from a Platform.OCR call.
+// Bounds are pixel coordinates in the SAME space as the input image
+// (caller-side scaling to logical px is the caller's job — typically
+// no-op since metis-cu screenshots are already in logical px).
+// Confidence ranges 0.0..1.0 where the engine reports it; 0 means
+// "not provided by this engine" rather than "definitely wrong".
+type OCRResult struct {
+	Text       string
+	Bounds     image.Rectangle
+	Confidence float64
+}
+
 // AccessTier mirrors Claude Code's frontmost-app gating: browsers are
 // "read" (visible but no input), terminals/IDEs are "click" (left-click
 // only), everything else is "full". The gate is enforced in pkg/tools
@@ -168,6 +180,17 @@ type Platform interface {
 	// defaults, and falls through to TierFull. Never errors — an
 	// unknown app is a TierFull app.
 	Tier(name string) AccessTier
+
+	// OCR runs an OS-native (or shelled-out) text recognizer over img
+	// and returns one OCRResult per recognised region. Empty slice
+	// means "no text found"; ErrNotImplemented means the platform has
+	// no OCR backend configured. Callers MUST tolerate the
+	// ErrNotImplemented case — OCR is an opt-in capability today
+	// (Linux: tesseract via PATH; darwin/windows: stubs pending).
+	// The image is single-frame and assumed to be the active screenshot
+	// in logical pixels. Larger inputs trade latency for recall; the
+	// caller's job (not the platform's) to crop / downsample first.
+	OCR(img image.Image) ([]OCRResult, error)
 
 	// frontmost-app gate (used by tools to enforce tier)
 	FrontmostApp() (string, AccessTier, error)

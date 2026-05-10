@@ -170,6 +170,9 @@ func (stubPlat) FrontmostApp() (string, platform.AccessTier, error) {
 	// tests pass through gateOrDeny unless they explicitly override.
 	return "stub-app", platform.TierFull, nil
 }
+func (stubPlat) OCR(image.Image) ([]platform.OCRResult, error) {
+	return nil, platform.ErrNotImplemented
+}
 func (stubPlat) Confirm(string) (bool, error) {
 	// Default-deny: tests that need a yes must override with a fake
 	// returning true. This matches the production OS-dialog default

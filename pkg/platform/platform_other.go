@@ -73,3 +73,7 @@ func (p *stubPlatform) FrontmostApp() (string, AccessTier, error) {
 func (p *stubPlatform) Confirm(message string) (bool, error) {
 	return false, ErrNotImplemented
 }
+
+func (p *stubPlatform) OCR(_ image.Image) ([]OCRResult, error) {
+	return nil, ErrNotImplemented
+}

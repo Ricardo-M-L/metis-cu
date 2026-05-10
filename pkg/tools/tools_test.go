@@ -85,6 +85,9 @@ func (stubPlatForTools) FrontmostApp() (string, platform.AccessTier, error) {
 	return "", platform.TierFull, platform.ErrNotImplemented
 }
 func (stubPlatForTools) Confirm(string) (bool, error) { return false, platform.ErrNotImplemented }
+func (stubPlatForTools) OCR(image.Image) ([]platform.OCRResult, error) {
+	return nil, platform.ErrNotImplemented
+}
 
 func TestNewRegistry(t *testing.T) {
 	var p stubPlatForTools
@@ -92,9 +95,9 @@ func TestNewRegistry(t *testing.T) {
 	if r == nil {
 		t.Fatal("NewRegistry returned nil")
 	}
-	// Should have 25 tool names registered
-	if len(r.specs) != 25 {
-		t.Errorf("expected 25 specs, got %d", len(r.specs))
+	// Should have 27 tool names registered
+	if len(r.specs) != 27 {
+		t.Errorf("expected 27 specs, got %d", len(r.specs))
 	}
 }
 
