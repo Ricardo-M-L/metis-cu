@@ -78,23 +78,34 @@ func xySchema() map[string]any {
 	}
 }
 
-// rejectModifiers reports whether the params carry a non-empty
-// `modifiers` array. Phase 2-A doesn't wire modifier press/release
-// (the platform interface doesn't accept modifiers on click and we're
-// forbidden from adding robotgo to pkg/tools), so adapters that
-// declare a `modifiers` field surface a clear "not supported yet"
-// error rather than silently dropping the modifier.
-func rejectModifiers(params map[string]any) (bool, string) {
+// optionalModifiers parses the schema-declared `modifiers` array into
+// a string slice the platform layer can consume. Missing key returns
+// (nil, nil); empty array returns (nil, nil) — both treated as "no
+// modifiers". Validates each entry against the documented enum so a
+// hallucinated "ctrlx" surfaces as a clear error rather than getting
+// passed to robotgo (which would silently drop unknown names).
+//
+// Replaces the old rejectModifiers (BUG-21): now that the platform
+// supports MouseClickWithModifiers, the tool layer just hands them
+// through after validation.
+func optionalModifiers(params map[string]any) ([]string, error) {
 	v, ok := params["modifiers"]
 	if !ok {
-		return false, ""
+		return nil, nil
 	}
 	mods, err := asStringSlice(v)
 	if err != nil {
-		return true, fmt.Sprintf("invalid modifiers: %v", err)
+		return nil, err
 	}
 	if len(mods) == 0 {
-		return false, ""
+		return nil, nil
 	}
-	return true, fmt.Sprintf("modifiers %v not supported in this version (Phase 2-A); will be wired in a follow-up", mods)
+	for _, m := range mods {
+		switch m {
+		case "cmd", "ctrl", "alt", "shift":
+		default:
+			return nil, fmt.Errorf("modifier %q not in {cmd, ctrl, alt, shift}", m)
+		}
+	}
+	return mods, nil
 }

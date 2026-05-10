@@ -30,6 +30,9 @@ func handleTripleClick(_ context.Context, plat platform.Platform, params map[str
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid params: %v", err), IsError: true}, nil
 	}
+	if denied, deny := gateOrDeny(plat, "triple_click"); deny {
+		return denied, nil
+	}
 	if err := plat.MouseClick(pt, platform.ButtonLeft, 3); err != nil {
 		return &Result{Text: fmt.Sprintf("triple_click(%d, %d): %v", pt.X, pt.Y, err), IsError: true}, nil
 	}

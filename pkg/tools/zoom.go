@@ -12,6 +12,14 @@ import (
 	"golang.org/x/image/draw"
 )
 
+// Legacy aliases used by the schema description so it compiles
+// without re-templating. Runtime caps come from zoomMaxFactorFor and
+// zoomMaxOutputPixelsFor which honour the Registry override (DD-3).
+const (
+	zoomMaxFactor       = DefaultZoomMaxFactor
+	zoomMaxOutputPixels = DefaultZoomMaxOutputPixels
+)
+
 func init() {
 	addRegistration(func(r *Registry) {
 		r.register(Spec{
@@ -20,7 +28,8 @@ func init() {
 				"`factor` (e.g. 2.0 = 2x). Returns a PNG image. Useful when the " +
 				"model needs to read small UI text that's illegible at full-screen " +
 				"resolution. The region is in logical pixels; out-of-bounds regions " +
-				"are clipped to the screenshot's bounds.",
+				"are clipped to the screenshot's bounds. Factor capped at 16x and " +
+				"output capped at 16M pixels to prevent OOM (BUG-18).",
 			Schema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -39,7 +48,8 @@ func init() {
 					"factor": map[string]any{
 						"type":             "number",
 						"exclusiveMinimum": 0,
-						"description":      "Scale factor. >1 enlarges, <1 shrinks. 1.0 returns the cropped region at native size.",
+						"maximum":          zoomMaxFactor,
+						"description":      "Scale factor. >1 enlarges, <1 shrinks. 1.0 returns the cropped region at native size. Capped at 16x.",
 					},
 				},
 				"required":             []string{"region", "factor"},
@@ -50,7 +60,7 @@ func init() {
 	})
 }
 
-func handleZoom(_ context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
+func handleZoom(ctx context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
 	region, err := requireRect(params, "region")
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid region: %v", err), IsError: true}, nil
@@ -61,6 +71,13 @@ func handleZoom(_ context.Context, plat platform.Platform, params map[string]any
 	}
 	if factor <= 0 {
 		return &Result{Text: fmt.Sprintf("invalid factor: %v (must be > 0)", factor), IsError: true}, nil
+	}
+	factorCap := zoomMaxFactorFor(ctx)
+	if factor > factorCap {
+		return &Result{
+			Text:    fmt.Sprintf("invalid factor: %v exceeds max %v (BUG-18 cap to prevent OOM)", factor, factorCap),
+			IsError: true,
+		}, nil
 	}
 	img, err := plat.Screenshot()
 	if err != nil {
@@ -107,6 +124,18 @@ func handleZoom(_ context.Context, plat platform.Platform, params map[string]any
 	}
 	if scaledH < 1 {
 		scaledH = 1
+	}
+	// Absolute pixel cap as a second backstop (BUG-18). The factor cap
+	// alone isn't enough — a 4K region at factor=4 is already 33MP.
+	pixelCap := zoomMaxOutputPixelsFor(ctx)
+	if int64(scaledW)*int64(scaledH) > int64(pixelCap) {
+		return &Result{
+			Text: fmt.Sprintf("zoom: output %dx%d (%.1fM pixels) exceeds %dM cap; reduce region or factor",
+				scaledW, scaledH,
+				float64(scaledW)*float64(scaledH)/1_000_000,
+				pixelCap/1_000_000),
+			IsError: true,
+		}, nil
 	}
 	out := image.NewRGBA(image.Rect(0, 0, scaledW, scaledH))
 	draw.CatmullRom.Scale(out, out.Bounds(), crop, crop.Bounds(), draw.Src, nil)

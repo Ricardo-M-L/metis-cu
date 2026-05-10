@@ -47,6 +47,9 @@ func handleScroll(_ context.Context, plat platform.Platform, params map[string]a
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid dy: %v", err), IsError: true}, nil
 	}
+	if denied, deny := gateOrDeny(plat, "scroll"); deny {
+		return denied, nil
+	}
 	if err := plat.Scroll(pt, dx, dy); err != nil {
 		return &Result{Text: fmt.Sprintf("scroll(%d, %d, dx=%d, dy=%d): %v", pt.X, pt.Y, dx, dy, err), IsError: true}, nil
 	}

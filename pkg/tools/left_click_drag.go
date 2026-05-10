@@ -28,7 +28,7 @@ func init() {
 	})
 }
 
-func handleLeftClickDrag(_ context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
+func handleLeftClickDrag(ctx context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
 	from, err := requirePoint(params, "from")
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid params: %v", err), IsError: true}, nil
@@ -37,7 +37,10 @@ func handleLeftClickDrag(_ context.Context, plat platform.Platform, params map[s
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid params: %v", err), IsError: true}, nil
 	}
-	if err := plat.MouseDrag(from, to, platform.ButtonLeft); err != nil {
+	if denied, deny := gateOrDeny(plat, "left_click_drag"); deny {
+		return denied, nil
+	}
+	if err := plat.MouseDrag(ctx, from, to, platform.ButtonLeft); err != nil {
 		return &Result{
 			Text:    fmt.Sprintf("left_click_drag((%d,%d) → (%d,%d)): %v", from.X, from.Y, to.X, to.Y, err),
 			IsError: true,

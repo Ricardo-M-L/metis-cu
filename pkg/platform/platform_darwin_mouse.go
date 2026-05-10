@@ -14,6 +14,9 @@ package platform
 // match what screenshot.go reports.
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/go-vgo/robotgo"
 )
 
@@ -32,33 +35,54 @@ func (p *darwinPlatform) MouseMove(pt Point) error {
 	return nil
 }
 
-// MouseClick moves to pt, then issues count clicks of btn. count==2
-// uses robotgo's native double-click path (a single CGEvent burst the
-// OS recognizes as a double-click); count==3 falls back to three
-// single clicks paced ~50ms apart to land within the system
-// double-click interval and trigger a triple-click select.
+// MouseClick moves to pt, then issues a click of btn at the given
+// multiplicity. macOS apps look at the CGEvent's
+// kCGMouseEventClickState field — NOT the time-delta between separate
+// clicks — to decide whether a click is a double / triple. Emitting
+// three plain single clicks 50ms apart (the old behaviour) made
+// TextEdit / Safari / Notes treat them as three independent clicks
+// rather than a triple-click "select line" gesture.
+//
+// robotgo.MultiClick on darwin routes through the C doubleClick
+// helper which calls CGEventSetIntegerValueField(kCGMouseEventClickState,
+// count) — exactly the bit the OS checks. count=1 stays on the plain
+// single-click path because MultiClick adds an unwanted MouseSleep
+// even for a single click.
 func (p *darwinPlatform) MouseClick(pt Point, btn Button, count int) error {
 	robotgo.Move(pt.X, pt.Y)
 	name := buttonString(btn)
-	switch {
-	case count <= 1:
+	if count <= 1 {
 		return robotgo.Click(name, false)
-	case count == 2:
-		return robotgo.Click(name, true)
-	default:
-		// Triple-click (or higher): emit single clicks back-to-back.
-		// Sleep is short enough to stay within the OS multi-click
-		// window but long enough that each event is processed.
-		for i := 0; i < count; i++ {
-			if err := robotgo.Click(name, false); err != nil {
-				return err
-			}
-			if i < count-1 {
-				robotgo.MilliSleep(50)
-			}
-		}
-		return nil
 	}
+	return robotgo.MultiClick(name, count)
+}
+
+// MouseClickWithModifiers presses each modifier (translated for the
+// current OS via translatePrimaryModifier — "cmd" stays "cmd" on
+// darwin), performs the click at multiplicity count, then releases
+// the modifiers in reverse order. The release is deferred so a panic
+// mid-click still leaves the keyboard in a clean state — without that,
+// a synthetic Cmd-click that wedged would keep Cmd physically pressed
+// in the OS until the user moves the real mouse (BUG-21).
+func (p *darwinPlatform) MouseClickWithModifiers(pt Point, btn Button, count int, mods []string) error {
+	if len(mods) == 0 {
+		return p.MouseClick(pt, btn, count)
+	}
+	pressed := make([]string, 0, len(mods))
+	defer func() {
+		// Release in reverse order so chord teardown matches buildup.
+		for i := len(pressed) - 1; i >= 0; i-- {
+			_ = robotgo.KeyToggle(pressed[i], "up")
+		}
+	}()
+	for _, m := range mods {
+		mt := translatePrimaryModifier(m, "darwin")
+		if err := robotgo.KeyToggle(mt, "down"); err != nil {
+			return fmt.Errorf("modifier KeyToggle down %q: %w", mt, err)
+		}
+		pressed = append(pressed, mt)
+	}
+	return p.MouseClick(pt, btn, count)
 }
 
 // MouseDown moves to pt and presses btn without releasing. Pair with
@@ -79,43 +103,46 @@ func (p *darwinPlatform) MouseUp(pt Point, btn Button) error {
 }
 
 // MouseDrag presses btn at `from`, smoothly drags to `to`, and
-// releases. MoveSmooth's 1.0/1.0 low/high makes the motion brisk but
-// non-instant so apps that distinguish drag from teleport (e.g.
-// canvas-based editors) treat it as a real drag.
-func (p *darwinPlatform) MouseDrag(from, to Point, btn Button) error {
+// releases. MoveSmooth's smooth speed (mouseSmoothLow/High, configurable
+// via DD-3) makes the motion non-instant so apps that distinguish drag
+// from teleport (e.g. canvas-based editors) treat it as a real drag.
+//
+// ctx (DD-2): bail before sending input if already cancelled, and
+// release the button if cancelled between move and up. We can't
+// interrupt the blocking MoveSmooth mid-step — would need to chunk
+// the drag — but bracketing it with ctx checks is enough to prevent
+// the worst case (cancelled call still completing the full sequence).
+func (p *darwinPlatform) MouseDrag(ctx context.Context, from, to Point, btn Button) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	name := buttonString(btn)
 	robotgo.Move(from.X, from.Y)
 	if err := robotgo.Toggle(name, "down"); err != nil {
 		return err
 	}
-	robotgo.MoveSmooth(to.X, to.Y, 1.0, 1.0)
-	return robotgo.Toggle(name, "up")
+	defer func() {
+		// Always release — even if MoveSmooth panicked or ctx fired
+		// during it, we can't leave the button physically held.
+		_ = robotgo.Toggle(name, "up")
+	}()
+	low, high := mouseSmoothSpeed()
+	robotgo.MoveSmooth(to.X, to.Y, low, high)
+	return ctx.Err()
 }
 
 // Scroll moves to pt and emits dx horizontal / dy vertical wheel
-// ticks. Per Anthropic's spec positive dy scrolls *down*, which
-// matches robotgo's convention on macOS (CGEvent natural-scroll is
-// not respected — these are raw wheel ticks).
+// ticks. Per Anthropic's spec positive dy scrolls *down* — but
+// robotgo.Scroll uses CGEvent's native convention where positive y
+// scrolls *up* (and positive x scrolls *left*). scrollSigns flips both
+// axes so the wire spec is honored regardless of OS natural-scroll
+// setting (CGEvent ignores the user pref — these are raw wheel ticks).
 func (p *darwinPlatform) Scroll(pt Point, dx, dy int) error {
 	robotgo.Move(pt.X, pt.Y)
-	robotgo.Scroll(dx, dy)
+	rx, ry := scrollSigns(dx, dy)
+	robotgo.Scroll(rx, ry)
 	return nil
 }
 
-// buttonString maps our typed Button enum onto robotgo's stringly-
-// typed button names. Unknown values default to "left" — the safest
-// fallback, since left-click is a no-op on most surfaces if the
-// caller meant something else, whereas right-click triggers context
-// menus that are hard to dismiss programmatically.
-func buttonString(b Button) string {
-	switch b {
-	case ButtonRight:
-		return "right"
-	case ButtonMiddle:
-		return "center"
-	case ButtonLeft:
-		return "left"
-	default:
-		return "left"
-	}
-}
+// buttonString lives in button_strings.go (no build tag) — DD-7
+// dedupe of identical helpers across darwin / linux / windows.

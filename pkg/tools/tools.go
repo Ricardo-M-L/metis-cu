@@ -68,10 +68,95 @@ type Spec struct {
 // then routes Call(name, params) per invocation.
 //
 // Registry is safe for concurrent reads; specs is populated once at
-// NewRegistry-time and never mutated afterwards.
+// NewRegistry-time and never mutated afterwards. ScreenshotMaxW/H are
+// runtime-configurable via SetScreenshotLimits — pkg/server reads
+// ~/.metis-cu/config.toml at boot and overrides the defaults so a
+// Retina display doesn't flood the LLM with native-resolution PNGs.
 type Registry struct {
 	plat  platform.Platform
 	specs map[string]Spec
+
+	// Screenshot downsampling cap. Defaults to 1280×800 (Anthropic CU
+	// reference value) at NewRegistry-time; pkg/server may override
+	// from the user's config.toml.
+	ScreenshotMaxW int
+	ScreenshotMaxH int
+
+	// TypePasteThreshold (BUG-22): rune-count above which `type`
+	// switches from per-key events to clipboard-paste. <= 0 means
+	// "use the package default" (DefaultTypePasteThreshold = 80).
+	TypePasteThreshold int
+
+	// HoldKeyMaxMs (BUG-11 + DD-3): upper bound on hold_key duration.
+	// 0 falls back to the package DefaultHoldKeyMaxMs.
+	HoldKeyMaxMs int
+
+	// ClipboardMaxBytes (BUG-15 + DD-3): cap on read_clipboard payload.
+	ClipboardMaxBytes int
+
+	// BatchMaxSteps (DD-3): cap on computer_batch step count.
+	BatchMaxSteps int
+
+	// ZoomMaxFactor (BUG-18 + DD-3): cap on zoom factor.
+	ZoomMaxFactor float64
+
+	// ZoomMaxOutputPixels (BUG-18 + DD-3): cap on zoom output pixel count.
+	ZoomMaxOutputPixels int
+}
+
+// DefaultScreenshotMaxW / H are the baked-in caps for screenshot
+// downsampling — sane defaults so the registry is usable without any
+// config file. Anthropic's computer-use docs cite 1280×800 as the
+// recommended target for the 24-tool spec.
+const (
+	DefaultScreenshotMaxW = 1280
+	DefaultScreenshotMaxH = 800
+)
+
+// SetScreenshotLimits overrides the per-screenshot cap. Non-positive
+// values are silently ignored so an empty / malformed config can't
+// produce a 0×0 image. Called once at boot from pkg/server after
+// LoadConfig — runtime mutation otherwise should be avoided since
+// Registry doesn't synchronise these reads (handler-side reads happen
+// off the same goroutine that constructed the Registry).
+func (r *Registry) SetScreenshotLimits(maxW, maxH int) {
+	if maxW > 0 {
+		r.ScreenshotMaxW = maxW
+	}
+	if maxH > 0 {
+		r.ScreenshotMaxH = maxH
+	}
+}
+
+// SetTypePasteThreshold overrides the rune-count above which `type`
+// switches to the paste path (BUG-22). Non-positive values are
+// silently ignored, leaving the package default in place.
+func (r *Registry) SetTypePasteThreshold(threshold int) {
+	if threshold > 0 {
+		r.TypePasteThreshold = threshold
+	}
+}
+
+// SetLimits is a bulk setter for the DD-3 limit knobs. Non-positive
+// values per field leave the package default intact, so a partial
+// config stanza never inadvertently zeroes out a cap (which would
+// reject every call past the now-impossible threshold).
+func (r *Registry) SetLimits(holdKeyMaxMs, clipboardMaxBytes, batchMaxSteps int, zoomMaxFactor float64, zoomMaxOutputPixels int) {
+	if holdKeyMaxMs > 0 {
+		r.HoldKeyMaxMs = holdKeyMaxMs
+	}
+	if clipboardMaxBytes > 0 {
+		r.ClipboardMaxBytes = clipboardMaxBytes
+	}
+	if batchMaxSteps > 0 {
+		r.BatchMaxSteps = batchMaxSteps
+	}
+	if zoomMaxFactor > 0 {
+		r.ZoomMaxFactor = zoomMaxFactor
+	}
+	if zoomMaxOutputPixels > 0 {
+		r.ZoomMaxOutputPixels = zoomMaxOutputPixels
+	}
 }
 
 // NewRegistry wires the platform implementation chosen by build-tag and
@@ -79,7 +164,12 @@ type Registry struct {
 // "not implemented" Result rather than panicking, so the server still
 // serves a complete tools/list response while sprints fill in coverage.
 func NewRegistry(plat platform.Platform) *Registry {
-	r := &Registry{plat: plat, specs: make(map[string]Spec, len(allToolNames))}
+	r := &Registry{
+		plat:           plat,
+		specs:          make(map[string]Spec, len(allToolNames)),
+		ScreenshotMaxW: DefaultScreenshotMaxW,
+		ScreenshotMaxH: DefaultScreenshotMaxH,
+	}
 	for _, name := range allToolNames {
 		// Default schema for not-yet-implemented tools: an empty
 		// object that accepts arbitrary fields. Real adapters

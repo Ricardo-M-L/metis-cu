@@ -6,7 +6,9 @@ package platform
 // shared via keycombo.go (no build tag).
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-vgo/robotgo"
 )
@@ -24,7 +26,8 @@ func (p *windowsPlatform) KeyPress(combo string) error {
 	return nil
 }
 
-func (p *windowsPlatform) KeyHold(combo string, ms int) error {
+// KeyHold: see darwin twin for the ctx-cancellation rationale (DD-2).
+func (p *windowsPlatform) KeyHold(ctx context.Context, combo string, ms int) error {
 	key, mods, err := parseKeyCombo(combo)
 	if err != nil {
 		return err
@@ -36,15 +39,28 @@ func (p *windowsPlatform) KeyHold(combo string, ms int) error {
 	if err := robotgo.KeyToggle(key, downArgs...); err != nil {
 		return fmt.Errorf("KeyToggle down %q: %w", combo, err)
 	}
-	robotgo.MilliSleep(ms)
-	upArgs := append([]any{"up"}, mods...)
-	if err := robotgo.KeyToggle(key, upArgs...); err != nil {
-		return fmt.Errorf("KeyToggle up %q: %w", combo, err)
+	var releaseErr error
+	defer func() {
+		upArgs := append([]any{"up"}, mods...)
+		if err := robotgo.KeyToggle(key, upArgs...); err != nil && releaseErr == nil {
+			releaseErr = fmt.Errorf("KeyToggle up %q: %w", combo, err)
+		}
+	}()
+	timer := time.NewTimer(time.Duration(ms) * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return releaseErr
 	}
-	return nil
 }
 
-func (p *windowsPlatform) Type(text string) error {
+// Type: see darwin twin for the ctx-at-entry rationale (DD-2).
+func (p *windowsPlatform) Type(ctx context.Context, text string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if text == "" {
 		return nil
 	}

@@ -30,6 +30,10 @@ func New() (Platform, error) { return &windowsPlatform{activeDisplay: 0}, nil }
 
 func (p *windowsPlatform) Close() error { return nil }
 
+// Screenshot captures the active display via GDI BitBlt and normalises
+// to logical pixels — Windows hi-DPI scaling (125% / 150% / 200%)
+// otherwise produces an image whose dimensions don't match the coord
+// space MouseClick / MouseMove use, leading to BUG-7-class miss-clicks.
 func (p *windowsPlatform) Screenshot() (image.Image, error) {
 	n := screenshot.NumActiveDisplays()
 	if n <= 0 {
@@ -44,7 +48,7 @@ func (p *windowsPlatform) Screenshot() (image.Image, error) {
 	if err != nil {
 		return nil, fmt.Errorf("capture display %d: %w", idx, err)
 	}
-	return img, nil
+	return normaliseToLogical(img, bounds.Dx(), bounds.Dy()), nil
 }
 
 func (p *windowsPlatform) DisplayCount() (int, error) {

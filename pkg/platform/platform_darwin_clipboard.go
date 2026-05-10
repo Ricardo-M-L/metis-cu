@@ -55,3 +55,27 @@ func (p *darwinPlatform) ClipboardWrite(text string) error {
 	clipboard.Write(clipboard.FmtText, []byte(text))
 	return nil
 }
+
+// ClipboardSnapshot returns the current clipboard text payload so a
+// caller can restore it later. Non-text payloads (image, file URL)
+// produce Empty=true so the caller's restore is a no-op (DD-1).
+func (p *darwinPlatform) ClipboardSnapshot() ClipboardSnapshot {
+	if err := ensureClipboard(); err != nil {
+		return ClipboardSnapshot{Empty: true}
+	}
+	raw := clipboard.Read(clipboard.FmtText)
+	if raw == nil {
+		return ClipboardSnapshot{Empty: true}
+	}
+	return ClipboardSnapshot{Text: string(raw)}
+}
+
+// ClipboardRestore writes the snapshot back. No-op when the snapshot
+// is empty — we'd rather leave a non-text payload alone than overwrite
+// it with "" (DD-1).
+func (p *darwinPlatform) ClipboardRestore(s ClipboardSnapshot) error {
+	if s.Empty {
+		return nil
+	}
+	return p.ClipboardWrite(s.Text)
+}

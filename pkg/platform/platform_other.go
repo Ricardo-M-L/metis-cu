@@ -2,7 +2,10 @@
 
 package platform
 
-import "image"
+import (
+	"context"
+	"image"
+)
 
 // Stub fallback for unsupported OSes (freebsd / openbsd / dragonfly /
 // solaris / etc.). darwin / linux / windows have full implementations
@@ -26,26 +29,41 @@ func (p *stubPlatform) SwitchDisplay(idx int) error      { return ErrNotImplemen
 // mouse
 func (p *stubPlatform) MouseMove(pt Point) error                         { return ErrNotImplemented }
 func (p *stubPlatform) MouseClick(pt Point, btn Button, count int) error { return ErrNotImplemented }
-func (p *stubPlatform) MouseDown(pt Point, btn Button) error             { return ErrNotImplemented }
-func (p *stubPlatform) MouseUp(pt Point, btn Button) error               { return ErrNotImplemented }
-func (p *stubPlatform) MouseDrag(from, to Point, btn Button) error       { return ErrNotImplemented }
-func (p *stubPlatform) Scroll(pt Point, dx, dy int) error                { return ErrNotImplemented }
+func (p *stubPlatform) MouseClickWithModifiers(pt Point, btn Button, count int, mods []string) error {
+	return ErrNotImplemented
+}
+func (p *stubPlatform) MouseDown(pt Point, btn Button) error { return ErrNotImplemented }
+func (p *stubPlatform) MouseUp(pt Point, btn Button) error   { return ErrNotImplemented }
+func (p *stubPlatform) MouseDrag(ctx context.Context, from, to Point, btn Button) error {
+	return ErrNotImplemented
+}
+func (p *stubPlatform) Scroll(pt Point, dx, dy int) error { return ErrNotImplemented }
 
 // keyboard
-func (p *stubPlatform) KeyPress(combo string) error        { return ErrNotImplemented }
-func (p *stubPlatform) KeyHold(combo string, ms int) error { return ErrNotImplemented }
-func (p *stubPlatform) Type(text string) error             { return ErrNotImplemented }
+func (p *stubPlatform) KeyPress(combo string) error { return ErrNotImplemented }
+func (p *stubPlatform) KeyHold(ctx context.Context, combo string, ms int) error {
+	return ErrNotImplemented
+}
+func (p *stubPlatform) Type(ctx context.Context, text string) error { return ErrNotImplemented }
 
 // clipboard
-func (p *stubPlatform) ClipboardRead() (string, error)   { return "", ErrNotImplemented }
-func (p *stubPlatform) ClipboardWrite(text string) error { return ErrNotImplemented }
+func (p *stubPlatform) ClipboardRead() (string, error)             { return "", ErrNotImplemented }
+func (p *stubPlatform) ClipboardWrite(text string) error           { return ErrNotImplemented }
+func (p *stubPlatform) ClipboardSnapshot() ClipboardSnapshot       { return ClipboardSnapshot{Empty: true} }
+func (p *stubPlatform) ClipboardRestore(s ClipboardSnapshot) error { return ErrNotImplemented }
 
 // application
-func (p *stubPlatform) OpenApplication(name string) error      { return ErrNotImplemented }
+func (p *stubPlatform) OpenApplication(ctx context.Context, name string) error {
+	return ErrNotImplemented
+}
 func (p *stubPlatform) GrantedApplications() ([]string, error) { return nil, ErrNotImplemented }
-func (p *stubPlatform) RequestAccess(apps []string) (map[string]AccessTier, error) {
+func (p *stubPlatform) RequestAccess(apps []string, tier AccessTier) (map[string]AccessTier, error) {
 	return nil, ErrNotImplemented
 }
+func (p *stubPlatform) Tier(name string) AccessTier { return TierFull }
 func (p *stubPlatform) FrontmostApp() (string, AccessTier, error) {
 	return "", TierFull, ErrNotImplemented
+}
+func (p *stubPlatform) Confirm(message string) (bool, error) {
+	return false, ErrNotImplemented
 }

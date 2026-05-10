@@ -26,7 +26,7 @@ func init() {
 						"minLength":   1,
 					},
 				},
-				"required":             []any{"combo"},
+				"required":             []string{"combo"},
 				"additionalProperties": false,
 			},
 			Handler: handleKey,
@@ -38,6 +38,9 @@ func handleKey(_ context.Context, plat platform.Platform, params map[string]any)
 	combo, err := requireString(params, "combo")
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("key: %v", err), IsError: true}, nil
+	}
+	if denied, deny := gateOrDeny(plat, "key"); deny {
+		return denied, nil
 	}
 	if err := plat.KeyPress(combo); err != nil {
 		return &Result{Text: fmt.Sprintf("key(%q): %v", combo, err), IsError: true}, nil

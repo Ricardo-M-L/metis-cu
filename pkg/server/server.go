@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/Ricardo-M-L/metis-cu/pkg/platform"
 	"github.com/Ricardo-M-L/metis-cu/pkg/tools"
@@ -35,11 +36,19 @@ type Options struct {
 // disconnects (which on stdio means EOF on stdin). The platform
 // implementation is selected at compile time via build tags in
 // pkg/platform/platform_<goos>.go.
+//
+// Defers plat.Close() so resources held by the platform layer
+// (kbinani/screenshot's X11 display handle on Linux, robotgo's
+// CGEvent source on macOS, clipboard library run loops) get
+// released cleanly on EOF. Without this, restarting the server in
+// the same process — common in tests and embedded use — could
+// reuse stale handles and produce confusing "no display" errors.
 func Run(opts Options) error {
-	srv, _, err := build(opts)
+	srv, reg, err := build(opts)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = reg.Platform().Close() }()
 	return mcpserver.ServeStdio(srv)
 }
 
@@ -53,6 +62,24 @@ func build(opts Options) (*mcpserver.MCPServer, *tools.Registry, error) {
 	}
 
 	reg := tools.NewRegistry(plat)
+
+	// Honor user overrides from ~/.metis-cu/config.toml (if present).
+	// LoadConfig falls back to defaults on any read/parse failure so a
+	// boot never fails on a hostile config — the MCP server prefers a
+	// working default to a startup error the user can't see.
+	cfg, _ := LoadConfig()
+	reg.SetScreenshotLimits(cfg.Screenshot.MaxWidth, cfg.Screenshot.MaxHeight)
+	reg.SetTypePasteThreshold(cfg.Keyboard.TypePasteThreshold)
+	reg.SetLimits(
+		cfg.Keyboard.HoldMaxMs,
+		cfg.Limits.ClipboardMaxBytes,
+		cfg.Limits.BatchMaxSteps,
+		cfg.Limits.ZoomMaxFactor,
+		cfg.Limits.ZoomMaxOutputPixels,
+	)
+	platform.SetMouseSmooth(cfg.Mouse.SmoothLow, cfg.Mouse.SmoothHigh)
+	platform.SetFrontmostProbeTimeout(time.Duration(cfg.Gate.FrontmostTimeoutMs) * time.Millisecond)
+	platform.SetFrontmostCacheTTL(time.Duration(cfg.Gate.FrontmostCacheTtlMs) * time.Millisecond)
 
 	srv := mcpserver.NewMCPServer(
 		"metis-cu",

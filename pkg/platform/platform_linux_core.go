@@ -34,8 +34,11 @@ func New() (Platform, error) { return &linuxPlatform{activeDisplay: 0}, nil }
 func (p *linuxPlatform) Close() error { return nil }
 
 // Screenshot captures the current active display via X11 (or Wayland's
-// XWayland bridge). kbinani/screenshot uses XGetImage under the hood
-// which works across most Linux desktops without extra permissions.
+// XWayland bridge) and normalises to logical pixels so the returned
+// coord space matches MouseMove / MouseClick (BUG-7). On Hi-DPI
+// fractional-scaling X servers (e.g. GNOME 200% scale) XGetImage
+// returns the framebuffer at physical resolution while CG-style bounds
+// stay logical — the normalisation collapses that mismatch.
 func (p *linuxPlatform) Screenshot() (image.Image, error) {
 	n := screenshot.NumActiveDisplays()
 	if n <= 0 {
@@ -50,7 +53,7 @@ func (p *linuxPlatform) Screenshot() (image.Image, error) {
 	if err != nil {
 		return nil, fmt.Errorf("capture display %d: %w", idx, err)
 	}
-	return img, nil
+	return normaliseToLogical(img, bounds.Dx(), bounds.Dy()), nil
 }
 
 func (p *linuxPlatform) DisplayCount() (int, error) {

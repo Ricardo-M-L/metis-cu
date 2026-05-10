@@ -9,6 +9,7 @@
 package platform
 
 import (
+	"context"
 	"errors"
 	"image"
 )
@@ -47,6 +48,17 @@ const (
 	ModShift Modifier = "shift"
 )
 
+// ClipboardSnapshot is the opaque payload returned by
+// ClipboardSnapshot and consumed by ClipboardRestore. Currently
+// captures only text — non-text formats (image, file URL) round-trip
+// as Empty=true so Restore is a no-op rather than risking corruption.
+// Future: add Image []byte / Files []string fields when the underlying
+// clipboard library exposes them.
+type ClipboardSnapshot struct {
+	Text  string
+	Empty bool // true when the source clipboard had no readable text
+}
+
 // AccessTier mirrors Claude Code's frontmost-app gating: browsers are
 // "read" (visible but no input), terminals/IDEs are "click" (left-click
 // only), everything else is "full". The gate is enforced in pkg/tools
@@ -74,25 +86,80 @@ type Platform interface {
 	// mouse
 	MouseMove(p Point) error
 	MouseClick(p Point, btn Button, count int) error // count: 1 single, 2 double, 3 triple
+	// MouseClickWithModifiers presses each modifier (cmd/ctrl/alt/shift),
+	// performs the click at the given multiplicity, then releases the
+	// modifiers — atomic at the platform layer so a panic mid-click can
+	// still release modifiers (BUG-21). Empty mods slice equals plain
+	// MouseClick. Cross-platform "cmd" → "ctrl" translation lives in
+	// keycombo.go's translatePrimaryModifier so an LLM trained on
+	// macOS-style "cmd-click" works on Linux/Windows too.
+	MouseClickWithModifiers(p Point, btn Button, count int, mods []string) error
 	MouseDown(p Point, btn Button) error
 	MouseUp(p Point, btn Button) error
-	MouseDrag(from, to Point, btn Button) error
+	// MouseDrag is bounded by ctx so a cancellation surfaces a
+	// ctx.Err — currently a "best-effort" check at entry/exit since
+	// robotgo.MoveSmooth is a blocking C call we can't interrupt
+	// mid-step. Future: chunk the drag into ctx-checked sub-moves.
+	MouseDrag(ctx context.Context, from, to Point, btn Button) error
 	Scroll(p Point, dx, dy int) error
 
 	// keyboard
 	KeyPress(combo string) error // "cmd+a", "esc", "F11"
-	KeyHold(combo string, ms int) error
-	Type(text string) error
+	// KeyHold presses combo, waits for ms milliseconds OR ctx
+	// cancellation, then releases. Cancellation guarantees the
+	// release fires (DD-2) so a SIGTERM mid-hold doesn't leave
+	// modifiers physically pressed in the OS.
+	KeyHold(ctx context.Context, combo string, ms int) error
+	// Type sends text. Bounded by ctx — bails with ctx.Err if
+	// already cancelled at entry. The paste-fallback path used for
+	// long strings (BUG-22) checks ctx between snapshot/write/paste/
+	// restore steps so a cancel cleans up without stranding text on
+	// the user's clipboard.
+	Type(ctx context.Context, text string) error
 
 	// clipboard
 	ClipboardRead() (string, error)
 	ClipboardWrite(text string) error
+	// ClipboardSnapshot captures the current clipboard payload as
+	// opaque bytes so a tool that needs to mutate the clipboard
+	// (e.g. paste-via-type fallback in BUG-22) can restore the
+	// user's prior content. The returned snapshot type is platform-
+	// internal — pass it back verbatim to ClipboardRestore.
+	ClipboardSnapshot() ClipboardSnapshot
+	// ClipboardRestore writes the snapshot back. Returns nil if the
+	// snapshot is empty / unsupported on this OS — restoration is
+	// best-effort, since for example a non-text payload that we
+	// can't introspect should simply be left as-is when the
+	// alternative is corrupting it.
+	ClipboardRestore(s ClipboardSnapshot) error
 
 	// application
-	OpenApplication(name string) error
+	// OpenApplication launches the named app. ctx caps the wait —
+	// `open -a` (macOS) and `xdg-open` (Linux) can block 10s+ on
+	// cold launches, so a cancel from upstream lets the MCP request
+	// abort instead of waiting out the full subprocess timeout.
+	OpenApplication(ctx context.Context, name string) error
 	GrantedApplications() ([]string, error)
-	RequestAccess(apps []string) (map[string]AccessTier, error)
+	// RequestAccess records each app at the given tier and persists
+	// the result. tier defaults to TierFull when callers pass an
+	// empty / unknown tier — preserves the historical behaviour of
+	// the single-arg form before BUG-20 added per-app tier choice.
+	RequestAccess(apps []string, tier AccessTier) (map[string]AccessTier, error)
+	// Tier returns the tier the platform would assign to `name`.
+	// Consults the persisted grants first, then the per-platform
+	// defaults, and falls through to TierFull. Never errors — an
+	// unknown app is a TierFull app.
+	Tier(name string) AccessTier
 
 	// frontmost-app gate (used by tools to enforce tier)
 	FrontmostApp() (string, AccessTier, error)
+
+	// Confirm pops a synchronous OS-native confirmation dialog and
+	// blocks until the user responds. Returns true when the user
+	// approves, false when they deny / cancel / let the dialog time
+	// out. Errors are reserved for hard failures (no dialog mechanism
+	// available, dispatcher unreachable). Used by request_access so an
+	// MCP client can't silently self-grant; future tools that need a
+	// human decision (e.g. "send file to remote") should reuse this.
+	Confirm(message string) (bool, error)
 }

@@ -78,7 +78,7 @@ func TestRequestAccess_AddsAndPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	got, err := p.RequestAccess([]string{"TestApp1", "TestApp2"})
+	got, err := p.RequestAccess([]string{"TestApp1", "TestApp2"}, TierFull)
 	if err != nil {
 		t.Fatalf("RequestAccess: %v", err)
 	}
@@ -111,6 +111,57 @@ func TestRequestAccess_AddsAndPersists(t *testing.T) {
 	if wire["TestApp2"] != string(TierFull) {
 		t.Fatalf("granted.json missing TestApp2=full; got %v", wire)
 	}
+}
+
+// TestConfirmScript_Escapes asserts the AppleScript builder escapes
+// backslashes and embedded quotes. Driven through this helper rather
+// than calling Confirm directly so we don't pop a real osascript dialog
+// during go test (which would either block forever or fail in CI).
+func TestConfirmScript_Escapes(t *testing.T) {
+	cases := []struct {
+		name, in string
+		mustHave []string
+	}{
+		{
+			name: "plain",
+			in:   "Allow this?",
+			mustHave: []string{
+				`display dialog "Allow this?"`,
+				`buttons {"Deny", "Allow"}`,
+				`default button "Deny"`,
+				`giving up after 60`,
+			},
+		},
+		{
+			name:     "escapes-double-quote",
+			in:       `Allow access to "Notes"?`,
+			mustHave: []string{`Allow access to \"Notes\"?`},
+		},
+		{
+			name:     "escapes-backslash",
+			in:       `path C:\Users`,
+			mustHave: []string{`path C:\\Users`},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := confirmScript(tc.in)
+			for _, want := range tc.mustHave {
+				if !contains([]string{got}, want) && !containsSubstring(got, want) {
+					t.Errorf("confirmScript(%q) missing %q\nfull script: %s", tc.in, want, got)
+				}
+			}
+		})
+	}
+}
+
+func containsSubstring(s, substr string) bool {
+	for i := 0; i+len(substr) <= len(s); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(haystack []string, needle string) bool {

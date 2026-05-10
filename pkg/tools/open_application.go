@@ -30,12 +30,15 @@ func init() {
 	})
 }
 
-func handleOpenApplication(_ context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
+func handleOpenApplication(ctx context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
 	name, err := requireString(params, "name")
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid params: %v", err), IsError: true}, nil
 	}
-	if err := plat.OpenApplication(name); err != nil {
+	if denied, deny := gateOrDeny(plat, "open_application"); deny {
+		return denied, nil
+	}
+	if err := plat.OpenApplication(ctx, name); err != nil {
 		return &Result{Text: fmt.Sprintf("open_application(%q): %v", name, err), IsError: true}, nil
 	}
 	return &Result{Text: fmt.Sprintf("opened %s", name)}, nil

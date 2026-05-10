@@ -30,11 +30,18 @@ func New() (Platform, error) { return &darwinPlatform{activeDisplay: 0}, nil }
 
 func (p *darwinPlatform) Close() error { return nil }
 
-// Screenshot captures the current active display via macOS CGImage. Returns
-// the raw image — encoding to PNG/JPEG is the caller's responsibility (the
-// MCP wire format expects base64-encoded PNG). Errors when display index is
-// out of range or screen-capture access has not been granted by the user
-// (System Settings → Privacy & Security → Screen Recording).
+// Screenshot captures the current active display via macOS CGImage and
+// returns it normalised to LOGICAL pixels (the same coordinate space
+// MouseClick / MouseMove operate in). On a Retina (2x) display
+// ScreenCaptureKit returns a 2880x1800 image even though the CG bounds
+// are 1440x900 logical — without normalisation the model would read
+// coordinates from a 2880-wide PNG and emit clicks that land at 2x the
+// intended position (BUG-7). The downsample below collapses that
+// mismatch so caller-side coords always match what the user sees.
+//
+// Errors when display index is out of range or screen-capture access
+// has not been granted by the user (System Settings → Privacy &
+// Security → Screen Recording).
 func (p *darwinPlatform) Screenshot() (image.Image, error) {
 	n := screenshot.NumActiveDisplays()
 	if n <= 0 {
@@ -44,12 +51,12 @@ func (p *darwinPlatform) Screenshot() (image.Image, error) {
 	if idx < 0 || idx >= n {
 		idx = 0
 	}
-	bounds := screenshot.GetDisplayBounds(idx)
+	bounds := screenshot.GetDisplayBounds(idx) // logical px
 	img, err := screenshot.CaptureRect(bounds)
 	if err != nil {
 		return nil, fmt.Errorf("capture display %d: %w", idx, err)
 	}
-	return img, nil
+	return normaliseToLogical(img, bounds.Dx(), bounds.Dy()), nil
 }
 
 // DisplayCount returns the number of attached active displays. Required for

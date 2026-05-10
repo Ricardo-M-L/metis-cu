@@ -9,6 +9,10 @@ package platform
 // branches stay co-located with their build tag.
 
 import (
+	"context"
+	"fmt"
+	"runtime"
+
 	"github.com/go-vgo/robotgo"
 )
 
@@ -22,65 +26,81 @@ func (p *linuxPlatform) MouseMove(pt Point) error {
 	return nil
 }
 
+// MouseClick: parity with darwin (BUG-14). Three plain singles 50ms
+// apart was unreliable for triple-click "select line" gestures across
+// Linux desktops because the target widgets check XInput's
+// detail.click_count field, not just timestamps. robotgo.MultiClick
+// routes through the underlying XTEST helper which sets that field
+// for us. Single-click stays on the plain Click path because
+// MultiClick adds an unwanted MouseSleep even for count=1.
 func (p *linuxPlatform) MouseClick(pt Point, btn Button, count int) error {
 	robotgo.Move(pt.X, pt.Y)
-	name := buttonStringLinux(btn)
-	switch {
-	case count <= 1:
+	name := buttonString(btn)
+	if count <= 1 {
 		return robotgo.Click(name, false)
-	case count == 2:
-		return robotgo.Click(name, true)
-	default:
-		for i := 0; i < count; i++ {
-			if err := robotgo.Click(name, false); err != nil {
-				return err
-			}
-			if i < count-1 {
-				robotgo.MilliSleep(50)
-			}
-		}
-		return nil
 	}
+	return robotgo.MultiClick(name, count)
+}
+
+// MouseClickWithModifiers: see darwin twin for the deferred-release
+// rationale (BUG-21). On Linux "cmd" is translated to "ctrl" via
+// translatePrimaryModifier so an LLM trained on macOS-style "cmd-click"
+// gets the Ctrl-click semantics it expects.
+func (p *linuxPlatform) MouseClickWithModifiers(pt Point, btn Button, count int, mods []string) error {
+	if len(mods) == 0 {
+		return p.MouseClick(pt, btn, count)
+	}
+	pressed := make([]string, 0, len(mods))
+	defer func() {
+		for i := len(pressed) - 1; i >= 0; i-- {
+			_ = robotgo.KeyToggle(pressed[i], "up")
+		}
+	}()
+	for _, m := range mods {
+		mt := translatePrimaryModifier(m, runtime.GOOS)
+		if err := robotgo.KeyToggle(mt, "down"); err != nil {
+			return fmt.Errorf("modifier KeyToggle down %q: %w", mt, err)
+		}
+		pressed = append(pressed, mt)
+	}
+	return p.MouseClick(pt, btn, count)
 }
 
 func (p *linuxPlatform) MouseDown(pt Point, btn Button) error {
 	robotgo.Move(pt.X, pt.Y)
-	return robotgo.Toggle(buttonStringLinux(btn), "down")
+	return robotgo.Toggle(buttonString(btn), "down")
 }
 
 func (p *linuxPlatform) MouseUp(pt Point, btn Button) error {
 	robotgo.Move(pt.X, pt.Y)
-	return robotgo.Toggle(buttonStringLinux(btn), "up")
+	return robotgo.Toggle(buttonString(btn), "up")
 }
 
-func (p *linuxPlatform) MouseDrag(from, to Point, btn Button) error {
-	name := buttonStringLinux(btn)
+// MouseDrag: see darwin twin for ctx + smooth-speed rationale (DD-2/DD-3).
+func (p *linuxPlatform) MouseDrag(ctx context.Context, from, to Point, btn Button) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	name := buttonString(btn)
 	robotgo.Move(from.X, from.Y)
 	if err := robotgo.Toggle(name, "down"); err != nil {
 		return err
 	}
-	robotgo.MoveSmooth(to.X, to.Y, 1.0, 1.0)
-	return robotgo.Toggle(name, "up")
+	defer func() { _ = robotgo.Toggle(name, "up") }()
+	low, high := mouseSmoothSpeed()
+	robotgo.MoveSmooth(to.X, to.Y, low, high)
+	return ctx.Err()
 }
 
+// Scroll: see scroll_signs.go — robotgo's underlying XTEST wrapper
+// uses positive y = scroll UP / positive x = scroll LEFT, opposite
+// to the wire spec.
 func (p *linuxPlatform) Scroll(pt Point, dx, dy int) error {
 	robotgo.Move(pt.X, pt.Y)
-	robotgo.Scroll(dx, dy)
+	rx, ry := scrollSigns(dx, dy)
+	robotgo.Scroll(rx, ry)
 	return nil
 }
 
-// buttonStringLinux mirrors the darwin helper but keeps a separate
-// definition so build-tag scoping stays clean (each OS file is self-
-// contained in its own build).
-func buttonStringLinux(b Button) string {
-	switch b {
-	case ButtonRight:
-		return "right"
-	case ButtonMiddle:
-		return "center"
-	case ButtonLeft:
-		return "left"
-	default:
-		return "left"
-	}
-}
+// Per-OS buttonString helpers were merged into the shared
+// button_strings.go (DD-7).

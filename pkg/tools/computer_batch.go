@@ -15,10 +15,21 @@ type batchTool struct {
 	Params map[string]any
 }
 
-// maxBatchSteps caps the chain length so a runaway batch can't lock the
-// session for thousands of synthetic events. 32 covers any realistic
-// macro (open app → click → type → screenshot etc.) with headroom.
-const maxBatchSteps = 32
+// maxBatchSteps is the legacy alias kept for the schema's maxItems
+// declaration. Runtime cap comes from batchMaxStepsFor(ctx) which
+// honours the Registry override (DD-3).
+const maxBatchSteps = DefaultBatchMaxSteps
+
+// imageProducingTools are the tools whose Result carries an Image. A
+// batch may include at most one of these — the *Result schema is
+// single-image and a second image-producing step would silently
+// overwrite the first, returning the wrong image to the model with no
+// error signal (BUG-13). Keep this list in sync with any future tool
+// that returns an image.
+var imageProducingTools = map[string]struct{}{
+	"screenshot": {},
+	"zoom":       {},
+}
 
 func init() {
 	addRegistration(func(r *Registry) {
@@ -92,11 +103,13 @@ func runBatch(ctx context.Context, reg *Registry, params map[string]any) (*Resul
 	if len(stepList) == 0 {
 		return &Result{Text: "steps: must contain at least one step", IsError: true}, nil
 	}
-	if len(stepList) > maxBatchSteps {
-		return &Result{Text: fmt.Sprintf("steps: %d exceeds max %d", len(stepList), maxBatchSteps), IsError: true}, nil
+	cap := batchMaxStepsFor(ctx)
+	if len(stepList) > cap {
+		return &Result{Text: fmt.Sprintf("steps: %d exceeds max %d", len(stepList), cap), IsError: true}, nil
 	}
 
 	steps := make([]batchTool, 0, len(stepList))
+	imageStepCount := 0
 	for i, raw := range stepList {
 		obj, ok := raw.(map[string]any)
 		if !ok {
@@ -108,6 +121,15 @@ func runBatch(ctx context.Context, reg *Registry, params map[string]any) (*Resul
 		}
 		if name == "computer_batch" {
 			return &Result{Text: fmt.Sprintf("steps[%d]: nested computer_batch is not allowed", i), IsError: true}, nil
+		}
+		if _, isImg := imageProducingTools[name]; isImg {
+			imageStepCount++
+			if imageStepCount > 1 {
+				return &Result{
+					Text:    fmt.Sprintf("steps[%d] (%s): only one image-producing step allowed per batch (Result schema is single-image; subsequent images would silently overwrite the first — BUG-13). Split into separate batches.", i, name),
+					IsError: true,
+				}, nil
+			}
 		}
 		var args map[string]any
 		if rawArgs, present := obj["params"]; present {

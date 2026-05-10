@@ -42,3 +42,22 @@ func (p *linuxPlatform) ClipboardWrite(text string) error {
 	clipboard.Write(clipboard.FmtText, []byte(text))
 	return nil
 }
+
+// ClipboardSnapshot / Restore: see darwin twin (DD-1).
+func (p *linuxPlatform) ClipboardSnapshot() ClipboardSnapshot {
+	if err := ensureClipboardLinux(); err != nil {
+		return ClipboardSnapshot{Empty: true}
+	}
+	raw := clipboard.Read(clipboard.FmtText)
+	if raw == nil {
+		return ClipboardSnapshot{Empty: true}
+	}
+	return ClipboardSnapshot{Text: string(raw)}
+}
+
+func (p *linuxPlatform) ClipboardRestore(s ClipboardSnapshot) error {
+	if s.Empty {
+		return nil
+	}
+	return p.ClipboardWrite(s.Text)
+}

@@ -33,8 +33,20 @@ func handleWriteClipboard(_ context.Context, plat platform.Platform, params map[
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("write_clipboard: %v", err), IsError: true}, nil
 	}
+	if denied, deny := gateOrDeny(plat, "write_clipboard"); deny {
+		return denied, nil
+	}
 	if err := plat.ClipboardWrite(text); err != nil {
 		return &Result{Text: fmt.Sprintf("write_clipboard: %v", err), IsError: true}, nil
 	}
-	return &Result{Text: fmt.Sprintf("wrote %d bytes to clipboard", len(text))}, nil
+	// BUG-16: report rune count alongside byte count so multi-byte UTF-8
+	// (Chinese, Japanese, emoji) doesn't read as a much larger payload
+	// than it actually is. The `type` tool already reports rune count
+	// for the same reason — keep them consistent.
+	chars := len([]rune(text))
+	bytes := len(text)
+	if chars == bytes {
+		return &Result{Text: fmt.Sprintf("wrote %d bytes to clipboard", bytes)}, nil
+	}
+	return &Result{Text: fmt.Sprintf("wrote %d chars (%d bytes) to clipboard", chars, bytes)}, nil
 }

@@ -15,7 +15,9 @@ package platform
 // passed through verbatim.
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-vgo/robotgo"
 )
@@ -42,15 +44,16 @@ func (p *darwinPlatform) KeyPress(combo string) error {
 	return nil
 }
 
-// KeyHold presses combo, sleeps for ms milliseconds, then releases.
-// Non-positive ms falls back to defaultKeyHoldMillis so a missing
-// duration produces a deterministic short hold rather than a no-op.
+// KeyHold presses combo, waits for ms milliseconds OR ctx
+// cancellation, then releases. Non-positive ms falls back to
+// defaultKeyHoldMillis. The release runs in a defer so even a panic
+// during the wait still releases modifier keys.
 //
-// Robotgo's KeyToggle takes the toggle direction ("down"/"up") as the
-// first variadic argument, followed by modifier names; we splice the
-// direction into a fresh slice so the caller-supplied mods slice is
-// untouched.
-func (p *darwinPlatform) KeyHold(combo string, ms int) error {
+// ctx propagation (DD-2) replaces the prior bare MilliSleep — a
+// SIGTERM mid-hold or an MCP request-level cancel now triggers an
+// immediate release instead of waiting out the full ms window with
+// modifiers stuck physically down.
+func (p *darwinPlatform) KeyHold(ctx context.Context, combo string, ms int) error {
 	key, mods, err := parseKeyCombo(combo)
 	if err != nil {
 		return err
@@ -62,15 +65,23 @@ func (p *darwinPlatform) KeyHold(combo string, ms int) error {
 	if err := robotgo.KeyToggle(key, downArgs...); err != nil {
 		return fmt.Errorf("KeyToggle down %q: %w", combo, err)
 	}
-	robotgo.MilliSleep(ms)
-	upArgs := append([]any{"up"}, mods...)
-	if err := robotgo.KeyToggle(key, upArgs...); err != nil {
-		// Best-effort release attempt; surface the error to the caller
-		// but don't try to "undo" the hold — there's nothing useful to
-		// retry that wouldn't risk wedging modifiers in the down state.
-		return fmt.Errorf("KeyToggle up %q: %w", combo, err)
+	var releaseErr error
+	defer func() {
+		upArgs := append([]any{"up"}, mods...)
+		if err := robotgo.KeyToggle(key, upArgs...); err != nil && releaseErr == nil {
+			releaseErr = fmt.Errorf("KeyToggle up %q: %w", combo, err)
+		}
+	}()
+	timer := time.NewTimer(time.Duration(ms) * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		// Caller cancelled — release fires via defer; ctx error
+		// propagates to the tool layer which surfaces it as IsError.
+		return ctx.Err()
+	case <-timer.C:
+		return releaseErr
 	}
-	return nil
 }
 
 // Type sends text through the OS input pipeline. UTF-8 is supported
@@ -78,7 +89,16 @@ func (p *darwinPlatform) KeyHold(combo string, ms int) error {
 // no error in v1.0.2, so we always return nil — any platform-level
 // failure surfaces as missing characters in the target field, which
 // the caller can detect with a follow-up screenshot.
-func (p *darwinPlatform) Type(text string) error {
+//
+// ctx (DD-2): bail before sending input if already cancelled. TypeStr
+// is a blocking C call we can't interrupt mid-string, so the
+// granularity is whole-message. The paste fallback in pkg/tools/type.go
+// checks ctx between snapshot/write/paste/restore steps for
+// finer-grained cancellation on long strings.
+func (p *darwinPlatform) Type(ctx context.Context, text string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if text == "" {
 		return nil
 	}

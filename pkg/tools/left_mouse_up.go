@@ -30,6 +30,9 @@ func handleLeftMouseUp(_ context.Context, plat platform.Platform, params map[str
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid params: %v", err), IsError: true}, nil
 	}
+	if denied, deny := gateOrDeny(plat, "left_mouse_up"); deny {
+		return denied, nil
+	}
 	if err := plat.MouseUp(pt, platform.ButtonLeft); err != nil {
 		return &Result{Text: fmt.Sprintf("left_mouse_up(%d, %d): %v", pt.X, pt.Y, err), IsError: true}, nil
 	}

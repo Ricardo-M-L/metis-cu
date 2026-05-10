@@ -3,8 +3,10 @@
 package platform
 
 import (
+	"context"
 	"os"
 	"testing"
+	"time"
 )
 
 // TestParseKeyCombo exercises the combo parser. Pure unit test — no
@@ -69,7 +71,7 @@ func TestType_EmptyString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if err := p.Type(""); err != nil {
+	if err := p.Type(context.Background(), ""); err != nil {
 		t.Fatalf("Type(\"\") returned error: %v", err)
 	}
 }
@@ -112,7 +114,39 @@ func TestKeyHold_DefaultDuration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if err := p.KeyHold("shift", 0); err != nil {
+	if err := p.KeyHold(context.Background(), "shift", 0); err != nil {
 		t.Fatalf("KeyHold(\"shift\", 0): %v", err)
+	}
+}
+
+// TestKeyHold_CtxCancellation (DD-2): cancelling the ctx mid-hold
+// returns ctx.Canceled and releases the key promptly. Doesn't need
+// a real GUI session — robotgo.KeyToggle on macOS is a CGEvent post
+// which works in any process the user runs locally.
+func TestKeyHold_CtxCancellation(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("skipping real KeyHold on CI (no GUI session)")
+	}
+	if testing.Short() {
+		t.Skip("skipping real KeyHold under -short")
+	}
+	p, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel after 50ms; the hold asks for 5s.
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+	start := time.Now()
+	err = p.KeyHold(ctx, "shift", 5000)
+	elapsed := time.Since(start)
+	if err != context.Canceled {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+	if elapsed > 1*time.Second {
+		t.Errorf("KeyHold did not release promptly on cancel: took %v", elapsed)
 	}
 }

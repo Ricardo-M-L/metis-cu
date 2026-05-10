@@ -30,6 +30,9 @@ func handleMiddleClick(_ context.Context, plat platform.Platform, params map[str
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid params: %v", err), IsError: true}, nil
 	}
+	if denied, deny := gateOrDeny(plat, "middle_click"); deny {
+		return denied, nil
+	}
 	if err := plat.MouseClick(pt, platform.ButtonMiddle, 1); err != nil {
 		return &Result{Text: fmt.Sprintf("middle_click(%d, %d): %v", pt.X, pt.Y, err), IsError: true}, nil
 	}

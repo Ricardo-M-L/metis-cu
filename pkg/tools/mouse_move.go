@@ -30,6 +30,9 @@ func handleMouseMove(_ context.Context, plat platform.Platform, params map[strin
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid params: %v", err), IsError: true}, nil
 	}
+	if denied, deny := gateOrDeny(plat, "mouse_move"); deny {
+		return denied, nil
+	}
 	if err := plat.MouseMove(pt); err != nil {
 		return &Result{Text: fmt.Sprintf("mouse_move(%d, %d): %v", pt.X, pt.Y, err), IsError: true}, nil
 	}

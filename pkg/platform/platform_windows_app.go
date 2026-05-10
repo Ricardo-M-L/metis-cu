@@ -13,6 +13,7 @@ package platform
 //   - Granted state shared via granted.go.
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"sort"
@@ -101,42 +102,62 @@ func processBaseName(pid uint32) (string, error) {
 // handles both absolute paths to .exe files and registered protocols
 // (e.g. "ms-settings:" or a URL). The empty "" before <name> is the
 // window-title argument that `start` requires when the first quoted
-// arg is the path.
-func (p *windowsPlatform) OpenApplication(name string) error {
+// arg is the path. ctx (DD-2) lets a request-level cancel abort the
+// subprocess.
+func (p *windowsPlatform) OpenApplication(ctx context.Context, name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("open application: name is empty")
 	}
-	cmd := exec.Command("cmd", "/c", "start", "", name)
+	cmd := exec.CommandContext(ctx, "cmd", "/c", "start", "", name)
 	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.Canceled {
+		return fmt.Errorf("start %q: cancelled by caller", name)
+	}
 	if err != nil {
 		return fmt.Errorf("start %q: %w (output: %s)", name, err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
 
+// FrontmostApp uses GetForegroundWindow + GetWindowThreadProcessId
+// (no subprocess) and resolves the PID to a basename via gopsutil.
+// Cached for 250ms via frontmost_cache.go to coalesce a burst of
+// gated calls — gopsutil's process inspection on Windows is fast but
+// not free, and a 30-step batch can otherwise cause 30 process
+// table walks back-to-back.
 func (p *windowsPlatform) FrontmostApp() (string, AccessTier, error) {
 	ensureGrantedLoaded()
+	if name, tier, err, ok := cachedFrontmost(); ok {
+		return name, tier, err
+	}
 	pid, err := foregroundProcessID()
 	if err != nil {
+		storeFrontmost("", TierFull, err)
 		return "", TierFull, err
 	}
 	name, err := processBaseName(pid)
 	if err != nil {
+		storeFrontmost("", TierFull, err)
 		return "", TierFull, err
 	}
 	if name == "" {
-		return "", TierFull, fmt.Errorf("foreground process name is empty")
+		err = fmt.Errorf("foreground process name is empty")
+		storeFrontmost("", TierFull, err)
+		return "", TierFull, err
 	}
 	grantedMu.RLock()
 	if tier, ok := granted[name]; ok {
 		grantedMu.RUnlock()
+		storeFrontmost(name, tier, nil)
 		return name, tier, nil
 	}
 	grantedMu.RUnlock()
 	if tier, ok := defaultTiersWindows[name]; ok {
+		storeFrontmost(name, tier, nil)
 		return name, tier, nil
 	}
+	storeFrontmost(name, TierFull, nil)
 	return name, TierFull, nil
 }
 
@@ -159,11 +180,21 @@ func (p *windowsPlatform) GrantedApplications() ([]string, error) {
 	return out, nil
 }
 
-func (p *windowsPlatform) RequestAccess(apps []string) (map[string]AccessTier, error) {
+// Confirm is unimplemented on Windows until we wire the user32
+// MessageBoxW syscall (or a powershell prompt fallback). Returning
+// ErrNotImplemented forces request_access to surface the gap rather
+// than silently approve.
+func (p *windowsPlatform) Confirm(message string) (bool, error) {
+	return false, ErrNotImplemented
+}
+
+// RequestAccess: see darwin twin for the BUG-12 + BUG-20 fixes.
+func (p *windowsPlatform) RequestAccess(apps []string, tier AccessTier) (map[string]AccessTier, error) {
 	ensureGrantedLoaded()
 	if len(apps) == 0 {
 		return map[string]AccessTier{}, nil
 	}
+	tier = normaliseTier(tier)
 	out := make(map[string]AccessTier, len(apps))
 	grantedMu.Lock()
 	for _, app := range apps {
@@ -171,15 +202,32 @@ func (p *windowsPlatform) RequestAccess(apps []string) (map[string]AccessTier, e
 		if app == "" {
 			continue
 		}
-		granted[app] = TierFull
-		out[app] = TierFull
+		granted[app] = tier
+		out[app] = tier
 	}
-	err := saveGranted()
+	wire := snapshotGranted()
 	grantedMu.Unlock()
-	if err != nil {
+	invalidateFrontmostCache()
+	if err := saveGranted(wire); err != nil {
 		return out, fmt.Errorf("persist granted: %w", err)
 	}
 	return out, nil
+}
+
+// Tier: windows twin of darwin's Tier — consults grants then windows
+// defaults, falls through to TierFull.
+func (p *windowsPlatform) Tier(name string) AccessTier {
+	ensureGrantedLoaded()
+	grantedMu.RLock()
+	if t, ok := granted[name]; ok {
+		grantedMu.RUnlock()
+		return t
+	}
+	grantedMu.RUnlock()
+	if t, ok := defaultTiersWindows[name]; ok {
+		return t
+	}
+	return TierFull
 }
 
 // silence unused-import warning when only some symbols are referenced

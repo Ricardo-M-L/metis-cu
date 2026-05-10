@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"errors"
 	"image"
 	"strings"
@@ -111,6 +112,14 @@ func (p *fixedTierPlat) FrontmostApp() (string, platform.AccessTier, error) {
 // embedded base for tighter fakes. The 22-method interface would be
 // noisy to inline in every test fake; embedding stubPlat keeps the
 // fakes a single overridden method long.
+//
+// FrontmostApp is the one exception: it returns a TierFull stub-app
+// rather than ErrNotImplemented, so handler tests that don't care
+// about gating (the vast majority) auto-pass through gateOrDeny
+// without each fake having to override FrontmostApp. Tests that DO
+// want to exercise gate behavior override FrontmostApp explicitly
+// (see fixedTierPlat / lookupErrPlat above and the gate-integration
+// tests).
 type stubPlat struct{}
 
 func (stubPlat) Close() error                     { return platform.ErrNotImplemented }
@@ -124,22 +133,40 @@ func (stubPlat) MouseMove(platform.Point) error { return platform.ErrNotImplemen
 func (stubPlat) MouseClick(platform.Point, platform.Button, int) error {
 	return platform.ErrNotImplemented
 }
-func (stubPlat) MouseDown(platform.Point, platform.Button) error { return platform.ErrNotImplemented }
-func (stubPlat) MouseUp(platform.Point, platform.Button) error   { return platform.ErrNotImplemented }
-func (stubPlat) MouseDrag(platform.Point, platform.Point, platform.Button) error {
+func (stubPlat) MouseClickWithModifiers(platform.Point, platform.Button, int, []string) error {
 	return platform.ErrNotImplemented
 }
-func (stubPlat) Scroll(platform.Point, int, int) error  { return platform.ErrNotImplemented }
-func (stubPlat) KeyPress(string) error                  { return platform.ErrNotImplemented }
-func (stubPlat) KeyHold(string, int) error              { return platform.ErrNotImplemented }
-func (stubPlat) Type(string) error                      { return platform.ErrNotImplemented }
-func (stubPlat) ClipboardRead() (string, error)         { return "", platform.ErrNotImplemented }
-func (stubPlat) ClipboardWrite(string) error            { return platform.ErrNotImplemented }
-func (stubPlat) OpenApplication(string) error           { return platform.ErrNotImplemented }
+func (stubPlat) MouseDown(platform.Point, platform.Button) error { return platform.ErrNotImplemented }
+func (stubPlat) MouseUp(platform.Point, platform.Button) error   { return platform.ErrNotImplemented }
+func (stubPlat) MouseDrag(context.Context, platform.Point, platform.Point, platform.Button) error {
+	return platform.ErrNotImplemented
+}
+func (stubPlat) Scroll(platform.Point, int, int) error      { return platform.ErrNotImplemented }
+func (stubPlat) KeyPress(string) error                      { return platform.ErrNotImplemented }
+func (stubPlat) KeyHold(context.Context, string, int) error { return platform.ErrNotImplemented }
+func (stubPlat) Type(context.Context, string) error         { return platform.ErrNotImplemented }
+func (stubPlat) ClipboardRead() (string, error)             { return "", platform.ErrNotImplemented }
+func (stubPlat) ClipboardWrite(string) error                { return platform.ErrNotImplemented }
+func (stubPlat) ClipboardSnapshot() platform.ClipboardSnapshot {
+	return platform.ClipboardSnapshot{Empty: true}
+}
+func (stubPlat) ClipboardRestore(platform.ClipboardSnapshot) error { return nil }
+func (stubPlat) OpenApplication(context.Context, string) error {
+	return platform.ErrNotImplemented
+}
 func (stubPlat) GrantedApplications() ([]string, error) { return nil, platform.ErrNotImplemented }
-func (stubPlat) RequestAccess([]string) (map[string]platform.AccessTier, error) {
+func (stubPlat) RequestAccess([]string, platform.AccessTier) (map[string]platform.AccessTier, error) {
 	return nil, platform.ErrNotImplemented
 }
+func (stubPlat) Tier(string) platform.AccessTier { return platform.TierFull }
 func (stubPlat) FrontmostApp() (string, platform.AccessTier, error) {
-	return "", platform.TierFull, platform.ErrNotImplemented
+	// Default-allow: pretend frontmost is a TierFull app so handler
+	// tests pass through gateOrDeny unless they explicitly override.
+	return "stub-app", platform.TierFull, nil
+}
+func (stubPlat) Confirm(string) (bool, error) {
+	// Default-deny: tests that need a yes must override with a fake
+	// returning true. This matches the production OS-dialog default
+	// (the dialog defaults to Deny).
+	return false, nil
 }

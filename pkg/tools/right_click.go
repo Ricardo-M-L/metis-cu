@@ -30,6 +30,9 @@ func handleRightClick(_ context.Context, plat platform.Platform, params map[stri
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid params: %v", err), IsError: true}, nil
 	}
+	if denied, deny := gateOrDeny(plat, "right_click"); deny {
+		return denied, nil
+	}
 	if err := plat.MouseClick(pt, platform.ButtonRight, 1); err != nil {
 		return &Result{Text: fmt.Sprintf("right_click(%d, %d): %v", pt.X, pt.Y, err), IsError: true}, nil
 	}
