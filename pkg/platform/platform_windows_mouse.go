@@ -96,5 +96,27 @@ func (p *windowsPlatform) Scroll(pt Point, dx, dy int) error {
 	return nil
 }
 
+// ScrollWithModifiers: see darwin twin for the deferred-release
+// rationale (BUG-21). On Windows "cmd" → "ctrl" via translatePrimaryModifier.
+func (p *windowsPlatform) ScrollWithModifiers(pt Point, dx, dy int, mods []string) error {
+	if len(mods) == 0 {
+		return p.Scroll(pt, dx, dy)
+	}
+	pressed := make([]string, 0, len(mods))
+	defer func() {
+		for i := len(pressed) - 1; i >= 0; i-- {
+			_ = robotgo.KeyToggle(pressed[i], "up")
+		}
+	}()
+	for _, m := range mods {
+		mt := translatePrimaryModifier(m, runtime.GOOS)
+		if err := robotgo.KeyToggle(mt, "down"); err != nil {
+			return fmt.Errorf("scroll-modifier KeyToggle down %q: %w", mt, err)
+		}
+		pressed = append(pressed, mt)
+	}
+	return p.Scroll(pt, dx, dy)
+}
+
 // Per-OS buttonString helpers were merged into the shared
 // button_strings.go (DD-7).

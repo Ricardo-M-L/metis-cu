@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"image/png"
 	"strings"
 	"testing"
@@ -155,4 +156,60 @@ func decodePNG(t *testing.T, b64 string) image.Image {
 		t.Fatalf("png decode: %v", err)
 	}
 	return img
+}
+
+// TestScreenshot_JPEGFormat: Registry config switches the encoder to
+// JPEG and the resulting bytes decode as JPEG (not PNG). MIME type and
+// Result.Text "JPEG q=N" tag also change. Locks in the Tier-1 borrow
+// from SoC's compress_screenshot path.
+func TestScreenshot_JPEGFormat(t *testing.T) {
+	p := &fakeScreenshotPlat{w: 800, h: 600}
+	r := &Registry{
+		plat:             p,
+		ScreenshotMaxW:   1280,
+		ScreenshotMaxH:   800,
+		ScreenshotFormat: "jpeg",
+		ScreenshotJPEGQ:  85,
+	}
+	ctx := context.WithValue(context.Background(), registryKey{}, r)
+	res, err := handleScreenshot(ctx, p, nil)
+	if err != nil {
+		t.Fatalf("transport error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected IsError: %s", res.Text)
+	}
+	if res.MIMEType != "image/jpeg" {
+		t.Errorf("MIMEType = %q, want image/jpeg", res.MIMEType)
+	}
+	if !strings.Contains(res.Text, "JPEG q=85") {
+		t.Errorf("expected JPEG q=85 tag in summary, got: %s", res.Text)
+	}
+	raw, err := base64.StdEncoding.DecodeString(res.Image)
+	if err != nil {
+		t.Fatalf("base64 decode: %v", err)
+	}
+	img, err := jpeg.Decode(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("jpeg decode: %v\nfirst bytes: %x", err, raw[:min(8, len(raw))])
+	}
+	if img.Bounds().Dx() != 800 || img.Bounds().Dy() != 600 {
+		t.Errorf("decoded JPEG dim = %dx%d, want 800x600", img.Bounds().Dx(), img.Bounds().Dy())
+	}
+}
+
+// TestScreenshot_DefaultsToPNG: with no Registry override the encoder
+// stays at PNG (lossless default — sharp edges for vision/OCR models).
+func TestScreenshot_DefaultsToPNG(t *testing.T) {
+	p := &fakeScreenshotPlat{w: 200, h: 100}
+	res, err := handleScreenshot(context.Background(), p, nil)
+	if err != nil {
+		t.Fatalf("transport error: %v", err)
+	}
+	if res.MIMEType != "image/png" {
+		t.Errorf("MIMEType = %q, want image/png", res.MIMEType)
+	}
+	if !strings.Contains(res.Text, "PNG") || strings.Contains(res.Text, "JPEG") {
+		t.Errorf("expected PNG-only summary, got: %s", res.Text)
+	}
 }

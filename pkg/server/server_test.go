@@ -41,17 +41,17 @@ func startInProcessClient(t *testing.T) (*client.Client, context.Context) {
 	return c, ctx
 }
 
-// TestE2E_ListsAll24Tools confirms the server advertises every tool
+// TestE2E_ListsAllTools confirms the server advertises every tool
 // declared in pkg/tools.allToolNames over the actual MCP wire — not
 // just via the in-memory Registry. Catches schema-marshal issues that
 // would manifest as a missing tool entry.
-func TestE2E_ListsAll24Tools(t *testing.T) {
+func TestE2E_ListsAllTools(t *testing.T) {
 	c, ctx := startInProcessClient(t)
 	resp, err := c.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
-	const expected = 24
+	const expected = 25
 	if got := len(resp.Tools); got != expected {
 		t.Fatalf("tools count = %d, want %d", got, expected)
 	}

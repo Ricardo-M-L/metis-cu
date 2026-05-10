@@ -37,7 +37,10 @@ func (p *gatedFakePlat) MouseUp(platform.Point, platform.Button) error   { retur
 func (p *gatedFakePlat) MouseDrag(context.Context, platform.Point, platform.Point, platform.Button) error {
 	return nil
 }
-func (p *gatedFakePlat) Scroll(platform.Point, int, int) error         { return nil }
+func (p *gatedFakePlat) Scroll(platform.Point, int, int) error { return nil }
+func (p *gatedFakePlat) ScrollWithModifiers(platform.Point, int, int, []string) error {
+	return nil
+}
 func (p *gatedFakePlat) KeyPress(string) error                         { return nil }
 func (p *gatedFakePlat) KeyHold(context.Context, string, int) error    { return nil }
 func (p *gatedFakePlat) Type(context.Context, string) error            { return nil }

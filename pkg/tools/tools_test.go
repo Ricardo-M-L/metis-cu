@@ -35,8 +35,11 @@ func (stubPlatForTools) Screenshot() (image.Image, error) { return nil, platform
 func (stubPlatForTools) CursorPosition() (platform.Point, error) {
 	return platform.Point{}, platform.ErrNotImplemented
 }
-func (stubPlatForTools) DisplayCount() (int, error)     { return 0, platform.ErrNotImplemented }
-func (stubPlatForTools) SwitchDisplay(int) error        { return platform.ErrNotImplemented }
+func (stubPlatForTools) DisplayCount() (int, error) { return 0, platform.ErrNotImplemented }
+func (stubPlatForTools) SwitchDisplay(int) error    { return platform.ErrNotImplemented }
+func (stubPlatForTools) DisplayBounds(int) (image.Rectangle, error) {
+	return image.Rectangle{}, platform.ErrNotImplemented
+}
 func (stubPlatForTools) MouseMove(platform.Point) error { return platform.ErrNotImplemented }
 func (stubPlatForTools) MouseClick(platform.Point, platform.Button, int) error {
 	return platform.ErrNotImplemented
@@ -54,7 +57,10 @@ func (stubPlatForTools) MouseDrag(context.Context, platform.Point, platform.Poin
 	return platform.ErrNotImplemented
 }
 func (stubPlatForTools) Scroll(platform.Point, int, int) error { return platform.ErrNotImplemented }
-func (stubPlatForTools) KeyPress(string) error                 { return platform.ErrNotImplemented }
+func (stubPlatForTools) ScrollWithModifiers(platform.Point, int, int, []string) error {
+	return platform.ErrNotImplemented
+}
+func (stubPlatForTools) KeyPress(string) error { return platform.ErrNotImplemented }
 func (stubPlatForTools) KeyHold(context.Context, string, int) error {
 	return platform.ErrNotImplemented
 }
@@ -86,9 +92,9 @@ func TestNewRegistry(t *testing.T) {
 	if r == nil {
 		t.Fatal("NewRegistry returned nil")
 	}
-	// Should have 24 tool names registered
-	if len(r.specs) != 24 {
-		t.Errorf("expected 24 specs, got %d", len(r.specs))
+	// Should have 25 tool names registered
+	if len(r.specs) != 25 {
+		t.Errorf("expected 25 specs, got %d", len(r.specs))
 	}
 }
 

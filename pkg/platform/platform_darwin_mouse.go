@@ -144,5 +144,30 @@ func (p *darwinPlatform) Scroll(pt Point, dx, dy int) error {
 	return nil
 }
 
+// ScrollWithModifiers brackets Scroll with hold/release of the named
+// modifier keys — see MouseClickWithModifiers twin for the deferred-
+// release rationale (BUG-21). Common idioms: ctrl+wheel = zoom in
+// most apps, shift+wheel = horizontal scroll, alt+wheel = step-by-
+// pixel in some image editors.
+func (p *darwinPlatform) ScrollWithModifiers(pt Point, dx, dy int, mods []string) error {
+	if len(mods) == 0 {
+		return p.Scroll(pt, dx, dy)
+	}
+	pressed := make([]string, 0, len(mods))
+	defer func() {
+		for i := len(pressed) - 1; i >= 0; i-- {
+			_ = robotgo.KeyToggle(pressed[i], "up")
+		}
+	}()
+	for _, m := range mods {
+		mt := translatePrimaryModifier(m, "darwin")
+		if err := robotgo.KeyToggle(mt, "down"); err != nil {
+			return fmt.Errorf("scroll-modifier KeyToggle down %q: %w", mt, err)
+		}
+		pressed = append(pressed, mt)
+	}
+	return p.Scroll(pt, dx, dy)
+}
+
 // buttonString lives in button_strings.go (no build tag) — DD-7
 // dedupe of identical helpers across darwin / linux / windows.

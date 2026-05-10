@@ -32,6 +32,56 @@ func TestLoadConfig_NoFile(t *testing.T) {
 	}
 }
 
+// TestLoadConfig_ScreenshotFormat: format=jpeg + quality override
+// flow through the loader; an unknown format string falls back to png
+// and an out-of-range quality clamps to default 85.
+func TestLoadConfig_ScreenshotFormat(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		wantFormat  string
+		wantQuality int
+	}{
+		{
+			"jpeg-with-quality",
+			"[screenshot]\nformat = \"jpeg\"\nquality = 70\n",
+			"jpeg", 70,
+		},
+		{
+			"unknown-format-fallback",
+			"[screenshot]\nformat = \"webp\"\n",
+			"png", 85,
+		},
+		{
+			"jpeg-bad-quality-clamps",
+			"[screenshot]\nformat = \"jpeg\"\nquality = 9000\n",
+			"jpeg", 85,
+		},
+		{
+			"png-explicit",
+			"[screenshot]\nformat = \"png\"\n",
+			"png", 85,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			setHome(t, home)
+			writeConfig(t, home, tc.body)
+			got, err := LoadConfig()
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if got.Screenshot.Format != tc.wantFormat {
+				t.Errorf("Format = %q, want %q", got.Screenshot.Format, tc.wantFormat)
+			}
+			if got.Screenshot.Quality != tc.wantQuality {
+				t.Errorf("Quality = %d, want %d", got.Screenshot.Quality, tc.wantQuality)
+			}
+		})
+	}
+}
+
 // TestLoadConfig_OverridesScreenshot: a valid TOML with [screenshot]
 // fields applies cleanly.
 func TestLoadConfig_OverridesScreenshot(t *testing.T) {

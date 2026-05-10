@@ -25,6 +25,9 @@ func (p *stubPlatform) Screenshot() (image.Image, error) { return nil, ErrNotImp
 func (p *stubPlatform) CursorPosition() (Point, error)   { return Point{}, ErrNotImplemented }
 func (p *stubPlatform) DisplayCount() (int, error)       { return 0, ErrNotImplemented }
 func (p *stubPlatform) SwitchDisplay(idx int) error      { return ErrNotImplemented }
+func (p *stubPlatform) DisplayBounds(idx int) (image.Rectangle, error) {
+	return image.Rectangle{}, ErrNotImplemented
+}
 
 // mouse
 func (p *stubPlatform) MouseMove(pt Point) error                         { return ErrNotImplemented }
@@ -38,6 +41,9 @@ func (p *stubPlatform) MouseDrag(ctx context.Context, from, to Point, btn Button
 	return ErrNotImplemented
 }
 func (p *stubPlatform) Scroll(pt Point, dx, dy int) error { return ErrNotImplemented }
+func (p *stubPlatform) ScrollWithModifiers(pt Point, dx, dy int, mods []string) error {
+	return ErrNotImplemented
+}
 
 // keyboard
 func (p *stubPlatform) KeyPress(combo string) error { return ErrNotImplemented }

@@ -1,4 +1,4 @@
-// Package tools registers the 24 computer-use tools and routes calls
+// Package tools registers the 25 computer-use tools and routes calls
 // to the Platform layer. Tool names + parameter shapes deliberately
 // mirror Anthropic's `mcp__computer-use__*` namespace so prompts,
 // traces, and eval datasets carry over.
@@ -63,7 +63,7 @@ type Spec struct {
 	Handler     Handler
 }
 
-// Registry holds the 24 tools plus the platform back-end. The MCP
+// Registry holds the 25 tools plus the platform back-end. The MCP
 // server iterates Specs() at handshake time to advertise the tool list,
 // then routes Call(name, params) per invocation.
 //
@@ -81,6 +81,13 @@ type Registry struct {
 	// from the user's config.toml.
 	ScreenshotMaxW int
 	ScreenshotMaxH int
+
+	// ScreenshotFormat selects the wire encoder: "png" (lossless,
+	// default) or "jpeg" (3-5× smaller payload at q=85). Anything
+	// else falls back to png in screenshotFormat(ctx). ScreenshotJPEGQ
+	// is honoured only when the format is jpeg, and clamps to [1,100].
+	ScreenshotFormat string
+	ScreenshotJPEGQ  int
 
 	// TypePasteThreshold (BUG-22): rune-count above which `type`
 	// switches from per-key events to clipboard-paste. <= 0 means
@@ -128,6 +135,20 @@ func (r *Registry) SetScreenshotLimits(maxW, maxH int) {
 	}
 }
 
+// SetScreenshotFormat overrides the wire encoding. Format must be
+// "png" or "jpeg" (anything else is silently ignored, leaving the
+// previous value — boot-time default is "png"). Quality applies only
+// to jpeg and clamps to [1,100]; out-of-range values are ignored.
+func (r *Registry) SetScreenshotFormat(format string, quality int) {
+	switch format {
+	case "png", "jpeg":
+		r.ScreenshotFormat = format
+	}
+	if quality >= 1 && quality <= 100 {
+		r.ScreenshotJPEGQ = quality
+	}
+}
+
 // SetTypePasteThreshold overrides the rune-count above which `type`
 // switches to the paste path (BUG-22). Non-positive values are
 // silently ignored, leaving the package default in place.
@@ -160,7 +181,7 @@ func (r *Registry) SetLimits(holdKeyMaxMs, clipboardMaxBytes, batchMaxSteps int,
 }
 
 // NewRegistry wires the platform implementation chosen by build-tag and
-// declares all 24 specs. Tools without a Handler yet return a
+// declares all 25 specs. Tools without a Handler yet return a
 // "not implemented" Result rather than panicking, so the server still
 // serves a complete tools/list response while sprints fill in coverage.
 func NewRegistry(plat platform.Platform) *Registry {
@@ -197,7 +218,7 @@ func defaultSchema() map[string]any {
 	}
 }
 
-// Specs returns the 24 specs sorted by name. The MCP server uses this
+// Specs returns the 25 specs sorted by name. The MCP server uses this
 // at tools/list time.
 func (r *Registry) Specs() []Spec {
 	out := make([]Spec, 0, len(r.specs))
@@ -294,6 +315,7 @@ var allToolNames = []string{
 	"cursor_position",
 	"switch_display",
 	"zoom",
+	"screen_size",
 
 	// mouse
 	"mouse_move",

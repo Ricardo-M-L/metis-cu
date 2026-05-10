@@ -181,8 +181,11 @@ func (stubPlatForParams) Screenshot() (image.Image, error) { return nil, platfor
 func (stubPlatForParams) CursorPosition() (platform.Point, error) {
 	return platform.Point{}, platform.ErrNotImplemented
 }
-func (stubPlatForParams) DisplayCount() (int, error)     { return 0, platform.ErrNotImplemented }
-func (stubPlatForParams) SwitchDisplay(int) error        { return platform.ErrNotImplemented }
+func (stubPlatForParams) DisplayCount() (int, error) { return 0, platform.ErrNotImplemented }
+func (stubPlatForParams) SwitchDisplay(int) error    { return platform.ErrNotImplemented }
+func (stubPlatForParams) DisplayBounds(int) (image.Rectangle, error) {
+	return image.Rectangle{}, platform.ErrNotImplemented
+}
 func (stubPlatForParams) MouseMove(platform.Point) error { return platform.ErrNotImplemented }
 func (stubPlatForParams) MouseClick(platform.Point, platform.Button, int) error {
 	return platform.ErrNotImplemented
@@ -197,12 +200,15 @@ func (stubPlatForParams) MouseDrag(platform.Point, platform.Point, platform.Butt
 	return platform.ErrNotImplemented
 }
 func (stubPlatForParams) Scroll(platform.Point, int, int) error { return platform.ErrNotImplemented }
-func (stubPlatForParams) KeyPress(string) error                 { return platform.ErrNotImplemented }
-func (stubPlatForParams) KeyHold(string, int) error             { return platform.ErrNotImplemented }
-func (stubPlatForParams) Type(string) error                     { return platform.ErrNotImplemented }
-func (stubPlatForParams) ClipboardRead() (string, error)        { return "", platform.ErrNotImplemented }
-func (stubPlatForParams) ClipboardWrite(string) error           { return platform.ErrNotImplemented }
-func (stubPlatForParams) OpenApplication(string) error          { return platform.ErrNotImplemented }
+func (stubPlatForParams) ScrollWithModifiers(platform.Point, int, int, []string) error {
+	return platform.ErrNotImplemented
+}
+func (stubPlatForParams) KeyPress(string) error          { return platform.ErrNotImplemented }
+func (stubPlatForParams) KeyHold(string, int) error      { return platform.ErrNotImplemented }
+func (stubPlatForParams) Type(string) error              { return platform.ErrNotImplemented }
+func (stubPlatForParams) ClipboardRead() (string, error) { return "", platform.ErrNotImplemented }
+func (stubPlatForParams) ClipboardWrite(string) error    { return platform.ErrNotImplemented }
+func (stubPlatForParams) OpenApplication(string) error   { return platform.ErrNotImplemented }
 func (stubPlatForParams) GrantedApplications() ([]string, error) {
 	return nil, platform.ErrNotImplemented
 }

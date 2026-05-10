@@ -67,3 +67,16 @@ func (p *windowsPlatform) SwitchDisplay(idx int) error {
 	p.activeDisplay = idx
 	return nil
 }
+
+// DisplayBounds returns the logical-pixel rectangle of display idx.
+// See darwin twin for rationale.
+func (p *windowsPlatform) DisplayBounds(idx int) (image.Rectangle, error) {
+	n := screenshot.NumActiveDisplays()
+	if n <= 0 {
+		return image.Rectangle{}, fmt.Errorf("no active displays found")
+	}
+	if idx < 0 || idx >= n {
+		return image.Rectangle{}, fmt.Errorf("display %d out of range (have %d)", idx, n)
+	}
+	return screenshot.GetDisplayBounds(idx), nil
+}

@@ -18,11 +18,18 @@ func init() {
 			"type":        "integer",
 			"description": "Vertical wheel ticks. Positive = down (matches Anthropic's spec; OS natural-scroll setting is bypassed — these are raw wheel events).",
 		}
+		props["modifiers"] = map[string]any{
+			"type":        "array",
+			"items":       map[string]any{"type": "string", "enum": []string{"cmd", "ctrl", "alt", "shift"}},
+			"description": "Optional modifiers to hold while scrolling: ctrl+wheel = zoom in most apps, shift+wheel = horizontal scroll, alt+wheel = step-by-pixel in some image editors. `cmd` is auto-translated to `ctrl` on Linux/Windows.",
+		}
 		r.register(Spec{
 			Name: "scroll",
 			Description: "Move to (x, y) and emit (dx, dy) wheel ticks. Positive dy scrolls down. " +
 				"One tick is one notch on a physical scroll wheel — for inertial / momentum " +
-				"scrolling emit a stream of small ticks rather than one giant one.",
+				"scrolling emit a stream of small ticks rather than one giant one. " +
+				"Optional `modifiers` array holds ctrl/shift/alt/cmd while scrolling " +
+				"(ctrl+wheel = zoom, shift+wheel = horizontal).",
 			Schema: map[string]any{
 				"type":                 "object",
 				"properties":           props,
@@ -47,8 +54,18 @@ func handleScroll(_ context.Context, plat platform.Platform, params map[string]a
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid dy: %v", err), IsError: true}, nil
 	}
+	mods, err := optionalModifiers(params)
+	if err != nil {
+		return &Result{Text: fmt.Sprintf("invalid modifiers: %v", err), IsError: true}, nil
+	}
 	if denied, deny := gateOrDeny(plat, "scroll"); deny {
 		return denied, nil
+	}
+	if len(mods) > 0 {
+		if err := plat.ScrollWithModifiers(pt, dx, dy, mods); err != nil {
+			return &Result{Text: fmt.Sprintf("scroll(%d, %d, dx=%d, dy=%d, mods=%v): %v", pt.X, pt.Y, dx, dy, mods, err), IsError: true}, nil
+		}
+		return &Result{Text: fmt.Sprintf("scrolled at (%d, %d) by (dx=%d, dy=%d) holding %v", pt.X, pt.Y, dx, dy, mods)}, nil
 	}
 	if err := plat.Scroll(pt, dx, dy); err != nil {
 		return &Result{Text: fmt.Sprintf("scroll(%d, %d, dx=%d, dy=%d): %v", pt.X, pt.Y, dx, dy, err), IsError: true}, nil

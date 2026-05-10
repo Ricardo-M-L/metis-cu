@@ -82,6 +82,14 @@ type Platform interface {
 	CursorPosition() (Point, error)
 	DisplayCount() (int, error)
 	SwitchDisplay(idx int) error
+	// DisplayBounds returns the LOGICAL pixel rectangle of display
+	// `idx` (0-based), origin at the global multi-monitor virtual
+	// coordinate space. Used by the `screen_size` tool to tell the
+	// model the canvas it should be emitting clicks into — matches
+	// Anthropic's `display_width_px` / `display_height_px` contract.
+	// Out-of-range idx returns ErrNotImplemented (or a wrapped errno
+	// per OS); never panics.
+	DisplayBounds(idx int) (image.Rectangle, error)
 
 	// mouse
 	MouseMove(p Point) error
@@ -102,6 +110,16 @@ type Platform interface {
 	// mid-step. Future: chunk the drag into ctx-checked sub-moves.
 	MouseDrag(ctx context.Context, from, to Point, btn Button) error
 	Scroll(p Point, dx, dy int) error
+	// ScrollWithModifiers is Scroll bracketed by holding the named
+	// modifier keys (e.g. "ctrl" for ctrl+wheel = zoom in most apps,
+	// "shift" for horizontal scroll, "cmd" for app-specific). Empty
+	// mods = plain Scroll. Modifier release is deferred so a panic
+	// mid-scroll still leaves the keyboard in a clean state, mirroring
+	// the MouseClickWithModifiers safety contract (BUG-21 pattern).
+	// Cross-platform "cmd" → "ctrl" translation lives in keycombo.go's
+	// translatePrimaryModifier so an LLM trained on macOS-style
+	// "cmd-scroll" works on Linux/Windows too.
+	ScrollWithModifiers(p Point, dx, dy int, mods []string) error
 
 	// keyboard
 	KeyPress(combo string) error // "cmd+a", "esc", "F11"

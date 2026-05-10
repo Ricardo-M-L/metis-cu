@@ -127,8 +127,11 @@ func (stubPlat) Screenshot() (image.Image, error) { return nil, platform.ErrNotI
 func (stubPlat) CursorPosition() (platform.Point, error) {
 	return platform.Point{}, platform.ErrNotImplemented
 }
-func (stubPlat) DisplayCount() (int, error)     { return 0, platform.ErrNotImplemented }
-func (stubPlat) SwitchDisplay(int) error        { return platform.ErrNotImplemented }
+func (stubPlat) DisplayCount() (int, error) { return 0, platform.ErrNotImplemented }
+func (stubPlat) SwitchDisplay(int) error    { return platform.ErrNotImplemented }
+func (stubPlat) DisplayBounds(int) (image.Rectangle, error) {
+	return image.Rectangle{}, platform.ErrNotImplemented
+}
 func (stubPlat) MouseMove(platform.Point) error { return platform.ErrNotImplemented }
 func (stubPlat) MouseClick(platform.Point, platform.Button, int) error {
 	return platform.ErrNotImplemented
@@ -141,7 +144,10 @@ func (stubPlat) MouseUp(platform.Point, platform.Button) error   { return platfo
 func (stubPlat) MouseDrag(context.Context, platform.Point, platform.Point, platform.Button) error {
 	return platform.ErrNotImplemented
 }
-func (stubPlat) Scroll(platform.Point, int, int) error      { return platform.ErrNotImplemented }
+func (stubPlat) Scroll(platform.Point, int, int) error { return platform.ErrNotImplemented }
+func (stubPlat) ScrollWithModifiers(platform.Point, int, int, []string) error {
+	return platform.ErrNotImplemented
+}
 func (stubPlat) KeyPress(string) error                      { return platform.ErrNotImplemented }
 func (stubPlat) KeyHold(context.Context, string, int) error { return platform.ErrNotImplemented }
 func (stubPlat) Type(context.Context, string) error         { return platform.ErrNotImplemented }

@@ -34,9 +34,17 @@ type Config struct {
 // the user hasn't set the keys; non-positive values are treated as
 // "fall back to default" so a stub-out config can't accidentally
 // produce a 0×0 image.
+//
+// Format chooses the wire encoding: "png" (lossless, default — sharp
+// edges for OCR/vision models) or "jpeg" (3-5× smaller payload at
+// q=85, recommended when MCP transport / token budget is the
+// bottleneck). Anything else falls back to png. Quality applies only
+// when format=jpeg and clamps to [1,100].
 type ScreenshotConfig struct {
-	MaxWidth  int `toml:"max_width"`
-	MaxHeight int `toml:"max_height"`
+	MaxWidth  int    `toml:"max_width"`
+	MaxHeight int    `toml:"max_height"`
+	Format    string `toml:"format"`
+	Quality   int    `toml:"quality"`
 }
 
 // KeyboardConfig governs the `type` tool's switching point between
@@ -84,6 +92,8 @@ func DefaultConfig() Config {
 		Screenshot: ScreenshotConfig{
 			MaxWidth:  1280,
 			MaxHeight: 800,
+			Format:    "png",
+			Quality:   85,
 		},
 		Keyboard: KeyboardConfig{
 			TypePasteThreshold: 80,
@@ -136,6 +146,15 @@ func LoadConfig() (Config, error) {
 	}
 	if c.Screenshot.MaxHeight <= 0 {
 		c.Screenshot.MaxHeight = 800
+	}
+	switch c.Screenshot.Format {
+	case "png", "jpeg":
+		// valid
+	default:
+		c.Screenshot.Format = "png"
+	}
+	if c.Screenshot.Quality < 1 || c.Screenshot.Quality > 100 {
+		c.Screenshot.Quality = 85
 	}
 	if c.Keyboard.TypePasteThreshold <= 0 {
 		c.Keyboard.TypePasteThreshold = 80

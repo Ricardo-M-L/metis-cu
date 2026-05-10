@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"image"
+	"image/color"
+	"image/jpeg"
 	"image/png"
 
 	"github.com/Ricardo-M-L/metis-cu/pkg/platform"
@@ -55,22 +57,80 @@ func handleScreenshot(ctx context.Context, plat platform.Platform, params map[st
 	img = downsampleScreenshot(img, maxW, maxH)
 	final := img.Bounds()
 
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		return &Result{Text: fmt.Sprintf("png encode: %v", err), IsError: true}, nil
+	format, quality := screenshotFormat(ctx)
+	buf, mime, err := encodeScreenshot(img, format, quality)
+	if err != nil {
+		return &Result{Text: fmt.Sprintf("%s encode: %v", format, err), IsError: true}, nil
+	}
+	tag := "PNG"
+	if format == "jpeg" {
+		tag = fmt.Sprintf("JPEG q=%d", quality)
 	}
 	var summary string
 	if final.Dx() == orig.Dx() && final.Dy() == orig.Dy() {
-		summary = fmt.Sprintf("captured %dx%d PNG (%d bytes)", orig.Dx(), orig.Dy(), buf.Len())
+		summary = fmt.Sprintf("captured %dx%d %s (%d bytes)", orig.Dx(), orig.Dy(), tag, buf.Len())
 	} else {
-		summary = fmt.Sprintf("captured %dx%d → downsampled %dx%d PNG (%d bytes, cap %dx%d)",
-			orig.Dx(), orig.Dy(), final.Dx(), final.Dy(), buf.Len(), maxW, maxH)
+		summary = fmt.Sprintf("captured %dx%d → downsampled %dx%d %s (%d bytes, cap %dx%d)",
+			orig.Dx(), orig.Dy(), final.Dx(), final.Dy(), tag, buf.Len(), maxW, maxH)
 	}
 	return &Result{
 		Text:     summary,
 		Image:    base64.StdEncoding.EncodeToString(buf.Bytes()),
-		MIMEType: "image/png",
+		MIMEType: mime,
 	}, nil
+}
+
+// screenshotFormat returns (format, quality) for the active call, in
+// that order. Pulls from the Registry on ctx (DD-3) and falls back to
+// "png"/85. Quality is only used when format is "jpeg".
+func screenshotFormat(ctx context.Context) (string, int) {
+	if reg, ok := ctx.Value(registryKey{}).(*Registry); ok && reg != nil {
+		f := reg.ScreenshotFormat
+		q := reg.ScreenshotJPEGQ
+		if f == "" {
+			f = "png"
+		}
+		if q < 1 || q > 100 {
+			q = 85
+		}
+		return f, q
+	}
+	return "png", 85
+}
+
+// encodeScreenshot picks the encoder by format. JPEG flattens alpha
+// onto a white background first (PNG-with-alpha → JPEG would otherwise
+// turn transparent pixels black, which is jarring for any UI element
+// that uses alpha for shadows / rounded corners). Returns the encoded
+// buffer and MIME type.
+func encodeScreenshot(img image.Image, format string, quality int) (*bytes.Buffer, string, error) {
+	var buf bytes.Buffer
+	switch format {
+	case "jpeg":
+		flat := flattenAlphaOnWhite(img)
+		if err := jpeg.Encode(&buf, flat, &jpeg.Options{Quality: quality}); err != nil {
+			return nil, "", err
+		}
+		return &buf, "image/jpeg", nil
+	default:
+		if err := png.Encode(&buf, img); err != nil {
+			return nil, "", err
+		}
+		return &buf, "image/png", nil
+	}
+}
+
+// flattenAlphaOnWhite composites src over an opaque white background.
+// Cheap pre-step before JPEG encode so transparent regions render as
+// white (the user-expected colour for typical UI screenshots) rather
+// than the black JPEG would produce.
+func flattenAlphaOnWhite(src image.Image) image.Image {
+	b := src.Bounds()
+	dst := image.NewRGBA(b)
+	white := image.NewUniform(color.White)
+	xdraw.Copy(dst, b.Min, white, b, xdraw.Src, nil)
+	xdraw.Copy(dst, b.Min, src, b, xdraw.Over, nil)
+	return dst
 }
 
 // screenshotLimits returns the per-screenshot pixel cap. Reads the

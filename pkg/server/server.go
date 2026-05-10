@@ -52,7 +52,7 @@ func Run(opts Options) error {
 	return mcpserver.ServeStdio(srv)
 }
 
-// build constructs the *MCPServer with all 24 tools registered and a
+// build constructs the *MCPServer with all 25 tools registered and a
 // matching Registry. Splitting it from Run lets tests spin up an
 // in-process client against the same server without touching stdio.
 func build(opts Options) (*mcpserver.MCPServer, *tools.Registry, error) {
@@ -69,6 +69,7 @@ func build(opts Options) (*mcpserver.MCPServer, *tools.Registry, error) {
 	// working default to a startup error the user can't see.
 	cfg, _ := LoadConfig()
 	reg.SetScreenshotLimits(cfg.Screenshot.MaxWidth, cfg.Screenshot.MaxHeight)
+	reg.SetScreenshotFormat(cfg.Screenshot.Format, cfg.Screenshot.Quality)
 	reg.SetTypePasteThreshold(cfg.Keyboard.TypePasteThreshold)
 	reg.SetLimits(
 		cfg.Keyboard.HoldMaxMs,
