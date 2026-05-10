@@ -66,7 +66,7 @@ func TestE2E_ListsAllTools(t *testing.T) {
 		}
 	}
 	mustHave := []string{
-		"screenshot", "cursor_position", "switch_display", "zoom",
+		"screenshot", "cursor_position", "switch_display", "zoom", "screen_size",
 		"mouse_move", "left_click", "right_click", "middle_click",
 		"double_click", "triple_click", "left_click_drag",
 		"left_mouse_down", "left_mouse_up", "scroll",

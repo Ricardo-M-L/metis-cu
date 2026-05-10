@@ -99,7 +99,9 @@ func build(opts Options) (*mcpserver.MCPServer, *tools.Registry, error) {
 		"metis-cu",
 		Version,
 		mcpserver.WithToolCapabilities(false),
+		mcpserver.WithPromptCapabilities(false),
 	)
+	registerPrompts(srv)
 
 	for _, spec := range reg.Specs() {
 		spec := spec // capture for closure
