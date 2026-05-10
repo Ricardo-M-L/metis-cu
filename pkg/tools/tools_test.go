@@ -95,9 +95,9 @@ func TestNewRegistry(t *testing.T) {
 	if r == nil {
 		t.Fatal("NewRegistry returned nil")
 	}
-	// Should have 27 tool names registered
-	if len(r.specs) != 27 {
-		t.Errorf("expected 27 specs, got %d", len(r.specs))
+	// Should have 28 tool names registered
+	if len(r.specs) != 28 {
+		t.Errorf("expected 28 specs, got %d", len(r.specs))
 	}
 }
 
