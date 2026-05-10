@@ -32,6 +32,36 @@ func TestLoadConfig_NoFile(t *testing.T) {
 	}
 }
 
+// TestLoadConfig_MouseSettleMs: settle delay flows through and a
+// negative value clamps to 0 (disabled), keeping the pre-Tier-1
+// "no sleep" default rather than a silent positive default that
+// surprises existing users.
+func TestLoadConfig_MouseSettleMs(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want int
+	}{
+		{"explicit-positive", "[mouse]\nsettle_ms = 500\n", 500},
+		{"negative-clamps-to-zero", "[mouse]\nsettle_ms = -200\n", 0},
+		{"explicit-zero-stays-zero", "[mouse]\nsettle_ms = 0\n", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			setHome(t, home)
+			writeConfig(t, home, tc.body)
+			got, err := LoadConfig()
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if got.Mouse.SettleMs != tc.want {
+				t.Errorf("Mouse.SettleMs = %d, want %d", got.Mouse.SettleMs, tc.want)
+			}
+		})
+	}
+}
+
 // TestLoadConfig_ScreenshotFormat: format=jpeg + quality override
 // flow through the loader; an unknown format string falls back to png
 // and an out-of-range quality clamps to default 85.

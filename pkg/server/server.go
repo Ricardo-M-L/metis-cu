@@ -79,6 +79,7 @@ func build(opts Options) (*mcpserver.MCPServer, *tools.Registry, error) {
 		cfg.Limits.ZoomMaxOutputPixels,
 	)
 	platform.SetMouseSmooth(cfg.Mouse.SmoothLow, cfg.Mouse.SmoothHigh)
+	reg.SetMouseSettleMs(cfg.Mouse.SettleMs)
 	platform.SetFrontmostProbeTimeout(time.Duration(cfg.Gate.FrontmostTimeoutMs) * time.Millisecond)
 	platform.SetFrontmostCacheTTL(time.Duration(cfg.Gate.FrontmostCacheTtlMs) * time.Millisecond)
 

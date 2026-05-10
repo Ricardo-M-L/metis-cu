@@ -25,6 +25,7 @@ func init() {
 						"description": "Key combo, '+'-joined. Final segment is the key, preceding segments are modifiers.",
 						"minLength":   1,
 					},
+					"return_screenshot": returnScreenshotSchema(),
 				},
 				"required":             []string{"combo"},
 				"additionalProperties": false,
@@ -34,7 +35,7 @@ func init() {
 	})
 }
 
-func handleKey(_ context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
+func handleKey(ctx context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
 	combo, err := requireString(params, "combo")
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("key: %v", err), IsError: true}, nil
@@ -45,5 +46,6 @@ func handleKey(_ context.Context, plat platform.Platform, params map[string]any)
 	if err := plat.KeyPress(combo); err != nil {
 		return &Result{Text: fmt.Sprintf("key(%q): %v", combo, err), IsError: true}, nil
 	}
-	return &Result{Text: fmt.Sprintf("pressed: %s", combo)}, nil
+	img, mime := settleAndMaybeShot(ctx, plat, params)
+	return &Result{Text: fmt.Sprintf("pressed: %s", combo), Image: img, MIMEType: mime}, nil
 }

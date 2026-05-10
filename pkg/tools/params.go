@@ -103,6 +103,32 @@ func optionalString(params map[string]any, key string, def string) (string, erro
 	return asString(v)
 }
 
+// optionalBool returns the bool at key, or def if absent. Accepts the
+// usual JSON bool, plus the string forms "true"/"false" so callers
+// hand-writing TOML / shell args don't have to know which serialisation
+// the wire uses today.
+func optionalBool(params map[string]any, key string, def bool) (bool, error) {
+	v, ok := params[key]
+	if !ok {
+		return def, nil
+	}
+	switch x := v.(type) {
+	case bool:
+		return x, nil
+	case string:
+		switch x {
+		case "true", "True", "TRUE", "1", "yes":
+			return true, nil
+		case "false", "False", "FALSE", "0", "no", "":
+			return false, nil
+		default:
+			return false, fmt.Errorf("expected bool, got %q", x)
+		}
+	default:
+		return false, fmt.Errorf("expected bool, got %T", v)
+	}
+}
+
 // asFloat coerces v into float64. Accepts JSON numbers (which decode to
 // float64), int variants (so callers passing programmatic values aren't
 // surprised), and stringified numbers.

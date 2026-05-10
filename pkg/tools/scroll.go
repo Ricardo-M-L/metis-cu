@@ -23,6 +23,7 @@ func init() {
 			"items":       map[string]any{"type": "string", "enum": []string{"cmd", "ctrl", "alt", "shift"}},
 			"description": "Optional modifiers to hold while scrolling: ctrl+wheel = zoom in most apps, shift+wheel = horizontal scroll, alt+wheel = step-by-pixel in some image editors. `cmd` is auto-translated to `ctrl` on Linux/Windows.",
 		}
+		props["return_screenshot"] = returnScreenshotSchema()
 		r.register(Spec{
 			Name: "scroll",
 			Description: "Move to (x, y) and emit (dx, dy) wheel ticks. Positive dy scrolls down. " +
@@ -41,7 +42,7 @@ func init() {
 	})
 }
 
-func handleScroll(_ context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
+func handleScroll(ctx context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
 	pt, err := requireXY(params)
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid params: %v", err), IsError: true}, nil
@@ -65,10 +66,12 @@ func handleScroll(_ context.Context, plat platform.Platform, params map[string]a
 		if err := plat.ScrollWithModifiers(pt, dx, dy, mods); err != nil {
 			return &Result{Text: fmt.Sprintf("scroll(%d, %d, dx=%d, dy=%d, mods=%v): %v", pt.X, pt.Y, dx, dy, mods, err), IsError: true}, nil
 		}
-		return &Result{Text: fmt.Sprintf("scrolled at (%d, %d) by (dx=%d, dy=%d) holding %v", pt.X, pt.Y, dx, dy, mods)}, nil
+		img, mime := settleAndMaybeShot(ctx, plat, params)
+		return &Result{Text: fmt.Sprintf("scrolled at (%d, %d) by (dx=%d, dy=%d) holding %v", pt.X, pt.Y, dx, dy, mods), Image: img, MIMEType: mime}, nil
 	}
 	if err := plat.Scroll(pt, dx, dy); err != nil {
 		return &Result{Text: fmt.Sprintf("scroll(%d, %d, dx=%d, dy=%d): %v", pt.X, pt.Y, dx, dy, err), IsError: true}, nil
 	}
-	return &Result{Text: fmt.Sprintf("scrolled at (%d, %d) by (dx=%d, dy=%d)", pt.X, pt.Y, dx, dy)}, nil
+	img, mime := settleAndMaybeShot(ctx, plat, params)
+	return &Result{Text: fmt.Sprintf("scrolled at (%d, %d) by (dx=%d, dy=%d)", pt.X, pt.Y, dx, dy), Image: img, MIMEType: mime}, nil
 }

@@ -38,6 +38,7 @@ func init() {
 						"minimum":     1,
 						"maximum":     holdKeyMaxMs,
 					},
+					"return_screenshot": returnScreenshotSchema(),
 				},
 				"required":             []string{"combo", "ms"},
 				"additionalProperties": false,
@@ -69,5 +70,6 @@ func handleHoldKey(ctx context.Context, plat platform.Platform, params map[strin
 	if err := plat.KeyHold(ctx, combo, ms); err != nil {
 		return &Result{Text: fmt.Sprintf("hold_key(%q, %dms): %v", combo, ms, err), IsError: true}, nil
 	}
-	return &Result{Text: fmt.Sprintf("held: %s for %dms", combo, ms)}, nil
+	img, mime := settleAndMaybeShot(ctx, plat, params)
+	return &Result{Text: fmt.Sprintf("held: %s for %dms", combo, ms), Image: img, MIMEType: mime}, nil
 }

@@ -17,8 +17,9 @@ func init() {
 			Schema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"from": pointSchema("Drag start point — where the mouse-down event fires."),
-					"to":   pointSchema("Drag end point — where the mouse-up event fires after the smooth motion completes."),
+					"from":              pointSchema("Drag start point — where the mouse-down event fires."),
+					"to":                pointSchema("Drag end point — where the mouse-up event fires after the smooth motion completes."),
+					"return_screenshot": returnScreenshotSchema(),
 				},
 				"required":             []string{"from", "to"},
 				"additionalProperties": false,
@@ -46,5 +47,6 @@ func handleLeftClickDrag(ctx context.Context, plat platform.Platform, params map
 			IsError: true,
 		}, nil
 	}
-	return &Result{Text: fmt.Sprintf("dragged from (%d, %d) to (%d, %d)", from.X, from.Y, to.X, to.Y)}, nil
+	img, mime := settleAndMaybeShot(ctx, plat, params)
+	return &Result{Text: fmt.Sprintf("dragged from (%d, %d) to (%d, %d)", from.X, from.Y, to.X, to.Y), Image: img, MIMEType: mime}, nil
 }

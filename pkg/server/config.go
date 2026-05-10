@@ -61,9 +61,18 @@ type KeyboardConfig struct {
 
 // MouseConfig — robotgo.MoveSmooth easing during MouseDrag. low/high
 // > 1 = slower, more "human"; < 1 = brisker. Default 1.0/1.0.
+//
+// SettleMs is the post-action quiescence delay (Tier-1 borrow from
+// Anthropic's reference: `_screenshot_delay = 2.0s`). After every
+// successful mouse / keyboard action we sleep SettleMs milliseconds
+// before returning, so the next screenshot the model takes captures
+// the post-animation steady state rather than mid-transition. 0 =
+// disabled (default — matches pre-Tier-1 behaviour). Common values:
+// 250–500 for snappy UIs, 1000+ for animation-heavy apps.
 type MouseConfig struct {
 	SmoothLow  float64 `toml:"smooth_low"`
 	SmoothHigh float64 `toml:"smooth_high"`
+	SettleMs   int     `toml:"settle_ms"`
 }
 
 // GateConfig — frontmost-app probe knobs (DD-3 + DD-4). timeout is
@@ -167,6 +176,9 @@ func LoadConfig() (Config, error) {
 	}
 	if c.Mouse.SmoothHigh <= 0 {
 		c.Mouse.SmoothHigh = 1.0
+	}
+	if c.Mouse.SettleMs < 0 {
+		c.Mouse.SettleMs = 0
 	}
 	if c.Gate.FrontmostTimeoutMs <= 0 {
 		c.Gate.FrontmostTimeoutMs = 1500

@@ -9,6 +9,8 @@ import (
 
 func init() {
 	addRegistration(func(r *Registry) {
+		props := xySchema()
+		props["return_screenshot"] = returnScreenshotSchema()
 		r.register(Spec{
 			Name: "left_mouse_down",
 			Description: "Press and hold the left mouse button at (x, y) without releasing. " +
@@ -16,7 +18,7 @@ func init() {
 				"prefer `left_click_drag`, which atomically moves + presses + drags + releases.",
 			Schema: map[string]any{
 				"type":                 "object",
-				"properties":           xySchema(),
+				"properties":           props,
 				"required":             []string{"x", "y"},
 				"additionalProperties": false,
 			},
@@ -25,7 +27,7 @@ func init() {
 	})
 }
 
-func handleLeftMouseDown(_ context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
+func handleLeftMouseDown(ctx context.Context, plat platform.Platform, params map[string]any) (*Result, error) {
 	pt, err := requireXY(params)
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("invalid params: %v", err), IsError: true}, nil
@@ -36,5 +38,6 @@ func handleLeftMouseDown(_ context.Context, plat platform.Platform, params map[s
 	if err := plat.MouseDown(pt, platform.ButtonLeft); err != nil {
 		return &Result{Text: fmt.Sprintf("left_mouse_down(%d, %d): %v", pt.X, pt.Y, err), IsError: true}, nil
 	}
-	return &Result{Text: fmt.Sprintf("left mouse down at (%d, %d)", pt.X, pt.Y)}, nil
+	img, mime := settleAndMaybeShot(ctx, plat, params)
+	return &Result{Text: fmt.Sprintf("left mouse down at (%d, %d)", pt.X, pt.Y), Image: img, MIMEType: mime}, nil
 }

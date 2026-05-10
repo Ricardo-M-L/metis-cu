@@ -51,6 +51,7 @@ func init() {
 						"type":        "string",
 						"description": "UTF-8 text to type. Empty string is a no-op.",
 					},
+					"return_screenshot": returnScreenshotSchema(),
 				},
 				"required":             []string{"text"},
 				"additionalProperties": false,
@@ -74,12 +75,14 @@ func handleTypeText(ctx context.Context, plat platform.Platform, params map[stri
 		if err := typeViaPaste(ctx, plat, text); err != nil {
 			return &Result{Text: fmt.Sprintf("type (paste path): %v", err), IsError: true}, nil
 		}
-		return &Result{Text: fmt.Sprintf("typed: %d chars (via paste, clipboard restored)", len(runes))}, nil
+		img, mime := settleAndMaybeShot(ctx, plat, params)
+		return &Result{Text: fmt.Sprintf("typed: %d chars (via paste, clipboard restored)", len(runes)), Image: img, MIMEType: mime}, nil
 	}
 	if err := plat.Type(ctx, text); err != nil {
 		return &Result{Text: fmt.Sprintf("type: %v", err), IsError: true}, nil
 	}
-	return &Result{Text: fmt.Sprintf("typed: %d chars", len(runes))}, nil
+	img, mime := settleAndMaybeShot(ctx, plat, params)
+	return &Result{Text: fmt.Sprintf("typed: %d chars", len(runes)), Image: img, MIMEType: mime}, nil
 }
 
 // typeViaPaste implements the BUG-22 + DD-1 paste path: snapshot →

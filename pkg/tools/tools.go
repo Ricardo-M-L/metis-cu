@@ -109,6 +109,12 @@ type Registry struct {
 
 	// ZoomMaxOutputPixels (BUG-18 + DD-3): cap on zoom output pixel count.
 	ZoomMaxOutputPixels int
+
+	// MouseSettleMs (Tier-1 borrow): post-action quiescence delay
+	// applied at the end of every successful mouse / keyboard / scroll
+	// / type handler. 0 = disabled (matches pre-Tier-1 behaviour).
+	// Pulled by mouseSettleFor(ctx) in limits.go.
+	MouseSettleMs int
 }
 
 // DefaultScreenshotMaxW / H are the baked-in caps for screenshot
@@ -133,6 +139,17 @@ func (r *Registry) SetScreenshotLimits(maxW, maxH int) {
 	if maxH > 0 {
 		r.ScreenshotMaxH = maxH
 	}
+}
+
+// SetMouseSettleMs overrides the post-action quiescence delay. Negative
+// values are silently coerced to 0 (disabled). 0 means "don't sleep" —
+// the pre-Tier-1 default. Used by every action handler at the end of
+// its successful path via settleAndMaybeShot().
+func (r *Registry) SetMouseSettleMs(ms int) {
+	if ms < 0 {
+		ms = 0
+	}
+	r.MouseSettleMs = ms
 }
 
 // SetScreenshotFormat overrides the wire encoding. Format must be
