@@ -6,10 +6,22 @@ import (
 	"testing"
 )
 
+// setHome is the cross-platform home redirect for tests. os.UserHomeDir
+// reads $HOME on darwin/linux but $USERPROFILE on windows; without the
+// double-set the windows CI runner ignores the t.TempDir() and reads
+// the real user's ~/.metis-cu/config.toml — failing every override
+// assertion with "got default values". Setting both keeps the test
+// portable.
+func setHome(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+}
+
 // TestLoadConfig_NoFile: missing config returns defaults verbatim, no
 // error. The file is optional — most users never create it.
 func TestLoadConfig_NoFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setHome(t, t.TempDir())
 	got, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -24,7 +36,7 @@ func TestLoadConfig_NoFile(t *testing.T) {
 // fields applies cleanly.
 func TestLoadConfig_OverridesScreenshot(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	writeConfig(t, home, `
 [screenshot]
 max_width = 1024
@@ -43,7 +55,7 @@ max_height = 768
 // set — the other stays at default rather than being zeroed out.
 func TestLoadConfig_PartialStanza(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	writeConfig(t, home, `
 [screenshot]
 max_width = 1600
@@ -64,7 +76,7 @@ max_width = 1600
 // (a 0×0 screenshot would be a crash trigger upstream).
 func TestLoadConfig_NegativeValues(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	writeConfig(t, home, `
 [screenshot]
 max_width = -1
@@ -82,7 +94,7 @@ max_height = 0
 // TestLoadConfig_KeyboardOverride: [keyboard] section is honoured.
 func TestLoadConfig_KeyboardOverride(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	writeConfig(t, home, `
 [keyboard]
 type_paste_threshold = 200
@@ -99,7 +111,7 @@ type_paste_threshold = 200
 // TestLoadConfig_KeyboardZeroFallback: zero/negative falls back to default.
 func TestLoadConfig_KeyboardZeroFallback(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	writeConfig(t, home, `
 [keyboard]
 type_paste_threshold = 0
@@ -117,7 +129,7 @@ type_paste_threshold = 0
 // underlying error so the caller can log if it cares.
 func TestLoadConfig_MalformedTOML(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	writeConfig(t, home, `not = valid = toml`)
 	got, err := LoadConfig()
 	if err == nil {
