@@ -88,6 +88,9 @@ func (stubPlatForTools) Confirm(string) (bool, error) { return false, platform.E
 func (stubPlatForTools) OCR(image.Image) ([]platform.OCRResult, error) {
 	return nil, platform.ErrNotImplemented
 }
+func (stubPlatForTools) ListWindows() ([]platform.WindowInfo, error) {
+	return nil, platform.ErrNotImplemented
+}
 
 func TestNewRegistry(t *testing.T) {
 	var p stubPlatForTools
@@ -95,9 +98,9 @@ func TestNewRegistry(t *testing.T) {
 	if r == nil {
 		t.Fatal("NewRegistry returned nil")
 	}
-	// Should have 28 tool names registered
-	if len(r.specs) != 28 {
-		t.Errorf("expected 28 specs, got %d", len(r.specs))
+	// Should have 29 tool names registered
+	if len(r.specs) != 29 {
+		t.Errorf("expected 29 specs, got %d", len(r.specs))
 	}
 }
 

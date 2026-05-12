@@ -36,7 +36,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libx11-dev libxtst-dev libxkbcommon-dev libpng-dev xorg-dev tesseract-ocr
+          sudo apt-get install -y libx11-dev libxtst-dev libxkbcommon-dev libpng-dev xorg-dev tesseract-ocr wmctrl
 
       - name: gofmt
         shell: bash

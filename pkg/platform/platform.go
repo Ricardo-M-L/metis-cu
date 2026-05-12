@@ -59,6 +59,21 @@ type ClipboardSnapshot struct {
 	Empty bool // true when the source clipboard had no readable text
 }
 
+// WindowInfo describes one on-screen window — the per-OS enumerators
+// (CGWindowListCopyWindowInfo on darwin, wmctrl/X11 on linux, Win32
+// EnumWindows on windows) return a list of these. Bounds are in
+// LOGICAL pixels in the virtual desktop coordinate space, matching
+// the Screenshot / MouseMove convention.
+//
+// Title may be empty for chromeless / utility windows. App is the
+// process display name — same shape FrontmostApp returns. Bounds
+// reported as image.Rectangle for symmetry with DisplayBounds.
+type WindowInfo struct {
+	App    string          `json:"app"`
+	Title  string          `json:"title"`
+	Bounds image.Rectangle `json:"bounds"`
+}
+
 // OCRResult is one recognised text region from a Platform.OCR call.
 // Bounds are pixel coordinates in the SAME space as the input image
 // (caller-side scaling to logical px is the caller's job — typically
@@ -191,6 +206,14 @@ type Platform interface {
 	// in logical pixels. Larger inputs trade latency for recall; the
 	// caller's job (not the platform's) to crop / downsample first.
 	OCR(img image.Image) ([]OCRResult, error)
+
+	// ListWindows enumerates every visible top-level window across
+	// every process. Pragmatic subset of full accessibility-tree
+	// exposure — gives the model "what's on screen" without needing
+	// a11y permissions or the per-OS accessibility bus.
+	// ErrNotImplemented on platforms where the enumerator isn't wired
+	// (currently windows; mac uses osascript, linux uses wmctrl).
+	ListWindows() ([]WindowInfo, error)
 
 	// frontmost-app gate (used by tools to enforce tier)
 	FrontmostApp() (string, AccessTier, error)

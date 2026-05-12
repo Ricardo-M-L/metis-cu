@@ -1,4 +1,4 @@
-// Package tools registers the 28 computer-use tools and routes calls
+// Package tools registers the 29 computer-use tools and routes calls
 // to the Platform layer. Tool names + parameter shapes deliberately
 // mirror Anthropic's `mcp__computer-use__*` namespace so prompts,
 // traces, and eval datasets carry over.
@@ -63,7 +63,7 @@ type Spec struct {
 	Handler     Handler
 }
 
-// Registry holds the 28 tools plus the platform back-end. The MCP
+// Registry holds the 29 tools plus the platform back-end. The MCP
 // server iterates Specs() at handshake time to advertise the tool list,
 // then routes Call(name, params) per invocation.
 //
@@ -198,7 +198,7 @@ func (r *Registry) SetLimits(holdKeyMaxMs, clipboardMaxBytes, batchMaxSteps int,
 }
 
 // NewRegistry wires the platform implementation chosen by build-tag and
-// declares all 28 specs. Tools without a Handler yet return a
+// declares all 29 specs. Tools without a Handler yet return a
 // "not implemented" Result rather than panicking, so the server still
 // serves a complete tools/list response while sprints fill in coverage.
 func NewRegistry(plat platform.Platform) *Registry {
@@ -235,7 +235,7 @@ func defaultSchema() map[string]any {
 	}
 }
 
-// Specs returns the 28 specs sorted by name. The MCP server uses this
+// Specs returns the 29 specs sorted by name. The MCP server uses this
 // at tools/list time.
 func (r *Registry) Specs() []Spec {
 	out := make([]Spec, 0, len(r.specs))
@@ -361,6 +361,7 @@ var allToolNames = []string{
 	// application
 	"open_application",
 	"list_granted_applications",
+	"list_windows",
 	"request_access",
 
 	// control / batch

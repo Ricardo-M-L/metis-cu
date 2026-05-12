@@ -77,3 +77,7 @@ func (p *stubPlatform) Confirm(message string) (bool, error) {
 func (p *stubPlatform) OCR(_ image.Image) ([]OCRResult, error) {
 	return nil, ErrNotImplemented
 }
+
+func (p *stubPlatform) ListWindows() ([]WindowInfo, error) {
+	return nil, ErrNotImplemented
+}

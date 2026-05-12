@@ -51,7 +51,7 @@ func TestE2E_ListsAllTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
-	const expected = 28
+	const expected = 29
 	if got := len(resp.Tools); got != expected {
 		t.Fatalf("tools count = %d, want %d", got, expected)
 	}
@@ -72,7 +72,7 @@ func TestE2E_ListsAllTools(t *testing.T) {
 		"left_mouse_down", "left_mouse_up", "scroll", "highlight_text_span",
 		"key", "hold_key", "type",
 		"read_clipboard", "write_clipboard",
-		"open_application", "list_granted_applications", "request_access",
+		"open_application", "list_granted_applications", "list_windows", "request_access",
 		"wait", "computer_batch",
 	}
 	for _, name := range mustHave {
