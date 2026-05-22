@@ -28,6 +28,12 @@
 FROM golang:1.23-bookworm AS builder
 WORKDIR /src
 
+# Use the Tencent debian mirror — 2026-05-22 cn-network build saw
+# deb.debian.org pulls hit 30+ min on basic packages. With the
+# Tencent mirror chrome + apt deps land in <3 min total.
+# Comment out when building outside CN.
+RUN sed -i 's|deb.debian.org|mirrors.cloud.tencent.com|g; s|security.debian.org|mirrors.cloud.tencent.com|g' /etc/apt/sources.list.d/debian.sources
+
 # Native deps for CGO: libxtst (XTEST), libx11 (xdo bindings),
 # libxxf86vm (screenshot). Same set the README lists for local
 # builds.
@@ -68,6 +74,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # X server + WM + minimal terminal + Chrome (apt repo) + tesseract.
 # We avoid Recommends to stay slim. Chrome installs from Google's
 # stable apt source so we get current security patches.
+# Tencent debian mirror for runtime stage too — saves ~25 min of
+# apt downloads when building from CN networks.
+RUN sed -i 's|deb.debian.org|mirrors.cloud.tencent.com|g; s|security.debian.org|mirrors.cloud.tencent.com|g' /etc/apt/sources.list.d/debian.sources
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg \
