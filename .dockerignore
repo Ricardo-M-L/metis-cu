@@ -1,0 +1,17 @@
+# Drop noise from build context to keep Docker layers small + fast.
+# DO NOT exclude *_test.go — they share the same package as the main
+# code; their absence breaks `go build` for some test-helper
+# constants that are package-scoped.
+.git/
+.github/
+.idea/
+.vscode/
+.DS_Store
+bin/
+*.test
+*.out
+*.log
+
+# Markdown + docs are not used at build time.
+*.md
+docs/

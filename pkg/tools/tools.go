@@ -341,6 +341,11 @@ var allToolNames = []string{
 	"browser_click",
 	"browser_type",
 
+	// macros (persistent tool-call sequences)
+	"macro_save",
+	"macro_play",
+	"macro_list",
+
 	// mouse
 	"mouse_move",
 	"left_click",
