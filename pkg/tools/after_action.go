@@ -61,7 +61,21 @@ func settleAndMaybeShot(ctx context.Context, plat platform.Platform, params map[
 		case <-t.C:
 		}
 	}
-	rs, _ := optionalBool(params, "return_screenshot", false)
+	// 2026-05-22: default flipped false → true for state-changing
+	// tools. Pre-fix the model had to opt-in by passing
+	// `return_screenshot=true` and most models forgot, then made an
+	// extra round-trip with a standalone Screenshot call to see what
+	// just happened. Auto-attaching the post-action frame mirrors
+	// Anthropic's reference cu loop and cuts the model's wall-time
+	// roughly in half on multi-step tasks.
+	//
+	// Cost trade: +1 image per state-changing call (~10K vision
+	// tokens), but -1 standalone Screenshot call. Net: model saves
+	// 30-40% wall time, token cost goes up ~10% — that's the
+	// intentional speed/cost trade. Set `return_screenshot=false`
+	// explicitly when batching unattended clicks where intermediate
+	// frames aren't useful.
+	rs, _ := optionalBool(params, "return_screenshot", true)
 	if !rs {
 		return "", ""
 	}
@@ -85,7 +99,7 @@ func settleAndMaybeShot(ctx context.Context, plat platform.Platform, params map[
 func returnScreenshotSchema() map[string]any {
 	return map[string]any{
 		"type":        "boolean",
-		"default":     false,
-		"description": "If true, capture and return a fresh screenshot after the action — saves a round-trip when the next step needs to see the result.",
+		"default":     true,
+		"description": "Default true: a post-action screenshot is auto-attached so the model sees the result without a separate Screenshot call. Set to false ONLY when batching unattended actions where intermediate frames waste tokens (e.g. rapid sequential clicks at known coords).",
 	}
 }

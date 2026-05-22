@@ -22,13 +22,29 @@ func (p *fakeAfterActionPlat) Screenshot() (image.Image, error) {
 	return img, nil
 }
 
-// TestSettleAndMaybeShot_NoOp: zero settle + no return_screenshot →
-// returns empty strings without calling Screenshot.
-func TestSettleAndMaybeShot_NoOp(t *testing.T) {
+// TestSettleAndMaybeShot_DefaultTrueAutoShot: 2026-05-22 — default
+// flipped to true. Calling with empty params should NOW return a
+// screenshot (the "saves a model round-trip" behavior). The old
+// "no-op when omitted" test is replaced with this one.
+func TestSettleAndMaybeShot_DefaultTrueAutoShot(t *testing.T) {
 	p := &fakeAfterActionPlat{}
 	img, mime := settleAndMaybeShot(context.Background(), p, map[string]any{})
+	if img == "" || mime == "" {
+		t.Errorf("default-true should auto-capture; got (%q, %q)", img, mime)
+	}
+	if p.shotCalled != 1 {
+		t.Errorf("Screenshot called %d times; want 1 (default-true)", p.shotCalled)
+	}
+}
+
+// TestSettleAndMaybeShot_ExplicitFalseSkips: the opt-out path.
+// Callers wanting to batch unattended actions can pass false to
+// suppress the auto-capture.
+func TestSettleAndMaybeShot_ExplicitFalseSkips(t *testing.T) {
+	p := &fakeAfterActionPlat{}
+	img, mime := settleAndMaybeShot(context.Background(), p, map[string]any{"return_screenshot": false})
 	if img != "" || mime != "" {
-		t.Errorf("expected empty (\"\", \"\"); got (%q, %q)", img, mime)
+		t.Errorf("explicit false should suppress; got (%q, %q)", img, mime)
 	}
 	if p.shotCalled != 0 {
 		t.Errorf("Screenshot called %d times; want 0", p.shotCalled)

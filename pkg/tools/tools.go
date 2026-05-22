@@ -334,6 +334,12 @@ var allToolNames = []string{
 	"zoom",
 	"screen_size",
 	"find_text_on_screen",
+	"screenshot_annotated",
+
+	// browser (CDP-driven; require Chrome --remote-debugging-port=9222)
+	"browser_dom_outline",
+	"browser_click",
+	"browser_type",
 
 	// mouse
 	"mouse_move",

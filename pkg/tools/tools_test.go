@@ -98,9 +98,13 @@ func TestNewRegistry(t *testing.T) {
 	if r == nil {
 		t.Fatal("NewRegistry returned nil")
 	}
-	// Should have 29 tool names registered
-	if len(r.specs) != 29 {
-		t.Errorf("expected 29 specs, got %d", len(r.specs))
+	// Tool count: 29 → 30 (screenshot_annotated, 2026-05-22) →
+	// 33 (browser_dom_outline / browser_click / browser_type via
+	// CDP, 2026-05-22). Adjust when new tools land — kept as a
+	// "did anyone accidentally drop a registration" canary, NOT
+	// a hard contract test.
+	if len(r.specs) != 33 {
+		t.Errorf("expected 33 specs, got %d", len(r.specs))
 	}
 }
 
