@@ -9,6 +9,19 @@ build:
 
 install:
 	go install .
+	@# Mirror the freshly-built binary to ~/.local/bin so users whose
+	@# mcp.toml pins the absolute path (e.g.
+	@#   command = "/Users/X/.local/bin/metis-cu")
+	@# pick up the new code without manually copying. metis's `/cu enable`
+	@# writes that pinned path; before this mirror step every `make install`
+	@# silently left mcp.toml pointing at a stale binary, masking
+	@# cu-side fixes for hours (session 41040b / 87e366f post-mortem,
+	@# 2026-05-26 — tier + OCR fixes "didn't work" because the actual
+	@# cu spawned was a 4-day-old binary).
+	@if [ -d "$$HOME/.local/bin" ]; then \
+		install -m 0755 "$$HOME/go/bin/metis-cu" "$$HOME/.local/bin/metis-cu" && \
+		echo "  installed $$HOME/.local/bin/metis-cu (mirrored from $$HOME/go/bin)"; \
+	fi
 
 test:
 	go test ./... -count=1

@@ -41,17 +41,30 @@ type FailsafeConfig struct {
 	CornerPx int  `toml:"corner_px"`
 }
 
-// ScreenshotConfig caps the per-call PNG dimensions before base64
+// ScreenshotConfig caps the per-call image dimensions before base64
 // encoding. Defaults to 1280×800 (Anthropic CU recommendation) when
 // the user hasn't set the keys; non-positive values are treated as
 // "fall back to default" so a stub-out config can't accidentally
 // produce a 0×0 image.
 //
-// Format chooses the wire encoding: "png" (lossless, default — sharp
-// edges for OCR/vision models) or "jpeg" (3-5× smaller payload at
-// q=85, recommended when MCP transport / token budget is the
-// bottleneck). Anything else falls back to png. Quality applies only
-// when format=jpeg and clamps to [1,100].
+// Format chooses the wire encoding:
+//
+//	"jpeg" (DEFAULT as of 2026-05-26) — 5-10× smaller than PNG at
+//	    visually-identical quality on typical UI screenshots; keeps
+//	    base64 payload well under the metis context-overflow snipper
+//	    threshold (~150 KB ≈ 35-40k tokens). The default-quality
+//	    q=85 was empirically picked by Anthropic's computer-use-demo
+//	    after testing OCR accuracy on UI text.
+//	"png" — lossless. Use only when 1-pixel edge fidelity matters
+//	    (rare in cu workloads; tested OCR doesn't gain meaningfully).
+//	    A 1280×800 PNG of a typical UI is ~400-800 KB → ~130k+ tokens,
+//	    which forces metis's emergency snipper to truncate every
+//	    tool_result. Session 87e366f post-mortem (2026-05-26):
+//	    100+ screenshot calls all snipped, model never saw a clean
+//	    frame, failed to land a click for 18 min.
+//
+// Anything other than "jpeg" / "png" falls back to "jpeg". Quality
+// applies only when format=jpeg and clamps to [1,100].
 type ScreenshotConfig struct {
 	MaxWidth  int    `toml:"max_width"`
 	MaxHeight int    `toml:"max_height"`
@@ -128,8 +141,13 @@ func DefaultConfig() Config {
 		Screenshot: ScreenshotConfig{
 			MaxWidth:  1280,
 			MaxHeight: 800,
-			Format:    "png",
-			Quality:   85,
+			// JPEG default (was PNG until 2026-05-26): PNG payloads
+			// blow past the metis context-overflow snipper threshold
+			// on every cu call, leaving the model with truncated
+			// frames it can't act on. JPEG q=85 keeps the same UI
+			// readability for ~5-10× less wire bytes.
+			Format:  "jpeg",
+			Quality: 85,
 		},
 		Keyboard: KeyboardConfig{
 			TypePasteThreshold: 80,
@@ -187,7 +205,10 @@ func LoadConfig() (Config, error) {
 	case "png", "jpeg":
 		// valid
 	default:
-		c.Screenshot.Format = "png"
+		// 2026-05-26: unknown format collapses to jpeg (was png).
+		// Matches DefaultConfig — jpeg is the only payload size that
+		// keeps base64 below the metis context-overflow threshold.
+		c.Screenshot.Format = "jpeg"
 	}
 	if c.Screenshot.Quality < 1 || c.Screenshot.Quality > 100 {
 		c.Screenshot.Quality = 85

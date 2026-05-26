@@ -78,9 +78,12 @@ func TestLoadConfig_ScreenshotFormat(t *testing.T) {
 			"jpeg", 70,
 		},
 		{
+			// 2026-05-26: default fallback changed from png to jpeg
+			// to keep base64 payload under metis's context-overflow
+			// snipper threshold (see ScreenshotConfig docstring).
 			"unknown-format-fallback",
 			"[screenshot]\nformat = \"webp\"\n",
-			"png", 85,
+			"jpeg", 85,
 		},
 		{
 			"jpeg-bad-quality-clamps",

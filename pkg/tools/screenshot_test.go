@@ -145,15 +145,24 @@ func TestDownsample_PreservesAspect(t *testing.T) {
 	}
 }
 
+// decodePNG decodes a base64-encoded image, accepting EITHER PNG or
+// JPEG so tests that exercise generic "screenshot pipeline" behaviour
+// don't have to care which encoder the default now is (2026-05-26
+// flipped the default from PNG to JPEG — see screenshot.go docstring).
+// Tests that NEED a specific encoder use png.Decode / jpeg.Decode
+// directly.
 func decodePNG(t *testing.T, b64 string) image.Image {
 	t.Helper()
 	raw, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
 		t.Fatalf("base64 decode: %v", err)
 	}
-	img, err := png.Decode(bytes.NewReader(raw))
+	if img, err := png.Decode(bytes.NewReader(raw)); err == nil {
+		return img
+	}
+	img, err := jpeg.Decode(bytes.NewReader(raw))
 	if err != nil {
-		t.Fatalf("png decode: %v", err)
+		t.Fatalf("neither png nor jpeg decode succeeded: %v", err)
 	}
 	return img
 }
@@ -198,18 +207,20 @@ func TestScreenshot_JPEGFormat(t *testing.T) {
 	}
 }
 
-// TestScreenshot_DefaultsToPNG: with no Registry override the encoder
-// stays at PNG (lossless default — sharp edges for vision/OCR models).
-func TestScreenshot_DefaultsToPNG(t *testing.T) {
+// TestScreenshot_DefaultsToJPEG: with no Registry override the encoder
+// is JPEG q=85 (changed from PNG on 2026-05-26 — see screenshot.go
+// screenshotFormat doc for why). Pins the default so a refactor of
+// the registry init can't silently revert it.
+func TestScreenshot_DefaultsToJPEG(t *testing.T) {
 	p := &fakeScreenshotPlat{w: 200, h: 100}
 	res, err := handleScreenshot(context.Background(), p, nil)
 	if err != nil {
 		t.Fatalf("transport error: %v", err)
 	}
-	if res.MIMEType != "image/png" {
-		t.Errorf("MIMEType = %q, want image/png", res.MIMEType)
+	if res.MIMEType != "image/jpeg" {
+		t.Errorf("MIMEType = %q, want image/jpeg", res.MIMEType)
 	}
-	if !strings.Contains(res.Text, "PNG") || strings.Contains(res.Text, "JPEG") {
-		t.Errorf("expected PNG-only summary, got: %s", res.Text)
+	if !strings.Contains(res.Text, "JPEG q=85") {
+		t.Errorf("expected JPEG q=85 summary, got: %s", res.Text)
 	}
 }

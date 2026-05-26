@@ -82,20 +82,23 @@ func handleScreenshot(ctx context.Context, plat platform.Platform, params map[st
 
 // screenshotFormat returns (format, quality) for the active call, in
 // that order. Pulls from the Registry on ctx (DD-3) and falls back to
-// "png"/85. Quality is only used when format is "jpeg".
+// "jpeg"/85 (changed from "png"/85 on 2026-05-26 — see
+// ScreenshotConfig docstring for context: PNG payloads forced metis's
+// context-overflow snipper on every cu screenshot). Quality is only
+// used when format is "jpeg".
 func screenshotFormat(ctx context.Context) (string, int) {
 	if reg, ok := ctx.Value(registryKey{}).(*Registry); ok && reg != nil {
 		f := reg.ScreenshotFormat
 		q := reg.ScreenshotJPEGQ
 		if f == "" {
-			f = "png"
+			f = "jpeg"
 		}
 		if q < 1 || q > 100 {
 			q = 85
 		}
 		return f, q
 	}
-	return "png", 85
+	return "jpeg", 85
 }
 
 // encodeScreenshot picks the encoder by format. JPEG flattens alpha
