@@ -128,6 +128,14 @@ func (p *darwinPlatform) FrontmostApp() (string, AccessTier, error) {
 		return name, tier, nil
 	}
 	grantedMu.RUnlock()
+	// Host-terminal session override (opt-in via config /
+	// METIS_CU_HOST_TERMINAL_TIER env) sits between user-granted
+	// entries and the hard-coded defaults. See
+	// host_terminal_override.go for the rationale.
+	if tier, ok := hostTerminalOverrideFor(name); ok {
+		storeFrontmost(name, tier, nil)
+		return name, tier, nil
+	}
 	if tier, ok := defaultTiers[name]; ok {
 		storeFrontmost(name, tier, nil)
 		return name, tier, nil
@@ -267,9 +275,10 @@ func (p *darwinPlatform) RequestAccess(apps []string, tier AccessTier) (map[stri
 }
 
 // Tier returns the assigned tier for `name`. Consults user grants
-// first (set via RequestAccess), then the hard-coded defaults; falls
-// through to TierFull. Never errors — an unknown app is a TierFull
-// app, matching FrontmostApp's behaviour.
+// first (set via RequestAccess), then the host-terminal override (when
+// set), then the hard-coded defaults; falls through to TierFull. Never
+// errors — an unknown app is a TierFull app, matching FrontmostApp's
+// behaviour.
 func (p *darwinPlatform) Tier(name string) AccessTier {
 	ensureGrantedLoaded()
 	grantedMu.RLock()
@@ -278,6 +287,9 @@ func (p *darwinPlatform) Tier(name string) AccessTier {
 		return t
 	}
 	grantedMu.RUnlock()
+	if t, ok := hostTerminalOverrideFor(name); ok {
+		return t
+	}
 	if t, ok := defaultTiers[name]; ok {
 		return t
 	}

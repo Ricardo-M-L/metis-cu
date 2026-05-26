@@ -67,6 +67,56 @@ func TestGrantedApplications_ContainsDefaults(t *testing.T) {
 	}
 }
 
+// TestTier_HonoursHostTerminalOverride — 2026-05-26 regression for
+// session 41040bea: with the host-terminal override unset, iTerm2
+// resolves to TierClick (historical default) which means an MCP call
+// from inside iTerm2 gets `open_application` rejected. With the
+// override set, iTerm2 resolves to the configured tier so metis can
+// drive the app it just launched.
+//
+// Pins the lookup order: user grants > host-terminal override >
+// hard-coded defaults > TierFull. The middle layer is what's new in
+// this change and the regression risk lives in there — granted-app
+// callers must still win even when the override is configured.
+func TestTier_HonoursHostTerminalOverride(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	resetGrantedForTest()
+	SetHostTerminalOverride("")
+	t.Cleanup(func() { SetHostTerminalOverride("") })
+
+	p, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	// Baseline: iTerm2 is TierClick per defaultTiers; that's what
+	// makes the metis case break.
+	if got := p.Tier("iTerm2"); got != TierClick {
+		t.Fatalf("baseline Tier(iTerm2) = %q, want click (defaultTiers); did the table change?", got)
+	}
+
+	// Promote the host terminals — iTerm2 should now report full.
+	SetHostTerminalOverride(TierFull)
+	if got := p.Tier("iTerm2"); got != TierFull {
+		t.Fatalf("after override=full, Tier(iTerm2) = %q, want full", got)
+	}
+	// Non-terminal default is untouched (the override only widens the
+	// allow-listed host terminals).
+	if got := p.Tier("Safari"); got != TierRead {
+		t.Errorf("override leaked to non-terminal app: Tier(Safari) = %q, want read", got)
+	}
+
+	// User grant must still win over the host-terminal override —
+	// otherwise a deliberately-restricted "iTerm2 = read" grant
+	// would be silently widened back to full by the override.
+	if _, err := p.RequestAccess([]string{"iTerm2"}, TierRead); err != nil {
+		t.Fatalf("RequestAccess: %v", err)
+	}
+	if got := p.Tier("iTerm2"); got != TierRead {
+		t.Errorf("user grant should win over override; got %q want read", got)
+	}
+}
+
 // TestRequestAccess_AddsAndPersists verifies the in-memory record plus
 // the JSON persistence side-effect. Uses t.Setenv to point HOME at a
 // temp dir so we don't pollute the real user's $HOME/.metis-cu.

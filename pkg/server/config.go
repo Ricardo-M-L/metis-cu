@@ -91,9 +91,24 @@ type MouseConfig struct {
 // how long we wait for osascript / xdotool before giving up; cache
 // TTL is how long we coalesce repeat lookups across a burst of gated
 // calls.
+//
+// HostTerminalTier (added 2026-05-26) opts the host-terminal apps
+// (Terminal / iTerm2 / Ghostty / WezTerm / Alacritty / kitty / Hyper /
+// Tabby) into a fixed tier regardless of the hard-coded TierClick
+// default. Targets the metis case: an MCP client running INSIDE a
+// terminal gets its `open_application` calls rejected because the
+// frontmost app is iTerm2 (TierClick) and the call needs TierFull.
+// Set to "full" to let metis drive `open_application` / `type` etc.
+// while the terminal is in front. Empty / unrecognised value keeps
+// the historical behaviour.
+//
+// Can also be set per-run via the METIS_CU_HOST_TERMINAL_TIER env var
+// (env wins over config — useful when metis spawns metis-cu and wants
+// to opt in without writing to the user's TOML).
 type GateConfig struct {
-	FrontmostTimeoutMs  int `toml:"frontmost_timeout_ms"`
-	FrontmostCacheTtlMs int `toml:"frontmost_cache_ttl_ms"`
+	FrontmostTimeoutMs  int    `toml:"frontmost_timeout_ms"`
+	FrontmostCacheTtlMs int    `toml:"frontmost_cache_ttl_ms"`
+	HostTerminalTier    string `toml:"host_terminal_tier"`
 }
 
 // LimitsConfig — anti-OOM / anti-DoS caps for tools that take

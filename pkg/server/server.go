@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/Ricardo-M-L/metis-cu/pkg/platform"
@@ -94,6 +95,14 @@ func build(opts Options) (*mcpserver.MCPServer, *tools.Registry, error) {
 	reg.SetMouseSettleMs(cfg.Mouse.SettleMs)
 	platform.SetFrontmostProbeTimeout(time.Duration(cfg.Gate.FrontmostTimeoutMs) * time.Millisecond)
 	platform.SetFrontmostCacheTTL(time.Duration(cfg.Gate.FrontmostCacheTtlMs) * time.Millisecond)
+	// Host-terminal tier override. Env wins over config so metis can
+	// flip this on per-spawn without writing to the user's TOML; an
+	// empty / unrecognised tier disables the override entirely.
+	hostTier := os.Getenv("METIS_CU_HOST_TERMINAL_TIER")
+	if hostTier == "" {
+		hostTier = cfg.Gate.HostTerminalTier
+	}
+	platform.SetHostTerminalOverride(platform.AccessTier(hostTier))
 
 	srv := mcpserver.NewMCPServer(
 		"metis-cu",
