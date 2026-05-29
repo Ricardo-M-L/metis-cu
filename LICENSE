@@ -1,17 +1,22 @@
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
+Copyright (c) 2026 Ricardo (github.com/Ricardo-M-L). All Rights Reserved.
 
-   Copyright 2026 Ricardo (github.com/Ricardo-M-L)
+This software and its source code are made available for viewing purposes only.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+You may NOT, without prior written permission from the copyright holder:
 
-       http://www.apache.org/licenses/LICENSE-2.0
+  - Clone, download, or otherwise obtain a local copy of this repository
+  - Use this software or any portion of it in any product or service
+  - Copy, reproduce, or duplicate the source code or any part thereof
+  - Modify, adapt, translate, or create derivative works
+  - Distribute, publish, sublicense, sell, or otherwise transfer the software
+  - Deploy or run this software in any production or commercial environment
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+This source code is made available for online viewing on GitHub only.
+Viewing the source code does not grant any license or rights to use it.
+
+For licensing inquiries, contact the copyright holder via GitHub:
+https://github.com/Ricardo-M-L
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY ARISING FROM OR IN CONNECTION WITH THE SOFTWARE.
