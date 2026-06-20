@@ -185,8 +185,11 @@ func (p *linuxPlatform) FrontmostApp() (string, AccessTier, error) {
 		storeFrontmost(name, tier, nil)
 		return name, tier, nil
 	}
-	storeFrontmost(name, TierFull, nil)
-	return name, TierFull, nil
+	// Fail CLOSED for unrecognised apps (see darwin twin): TierClick blocks
+	// keystroke injection / app-launch into unapproved apps; old default was
+	// the fail-open TierFull.
+	storeFrontmost(name, TierClick, nil)
+	return name, TierClick, nil
 }
 
 func (p *linuxPlatform) GrantedApplications() ([]string, error) {

@@ -140,8 +140,15 @@ func (p *darwinPlatform) FrontmostApp() (string, AccessTier, error) {
 		storeFrontmost(name, tier, nil)
 		return name, tier, nil
 	}
-	storeFrontmost(name, TierFull, nil)
-	return name, TierFull, nil
+	// Fail CLOSED for unrecognised apps: default to TierClick (left-click
+	// only), NOT TierFull. The old fail-open default let the model type /
+	// press keys / launch apps into ANY unlisted application — a password
+	// manager, banking app, etc. — that the operator never approved.
+	// TierClick blocks the keystroke-injection (secret-theft) vector while
+	// still allowing basic navigation; operators grant TierFull explicitly
+	// per app via RequestAccess.
+	storeFrontmost(name, TierClick, nil)
+	return name, TierClick, nil
 }
 
 // GrantedApplications returns the union of the default classification

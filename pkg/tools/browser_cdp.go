@@ -130,7 +130,18 @@ func cdpContext(port int) (context.Context, error) {
 	cdpAllocatorMu.Lock()
 	defer cdpAllocatorMu.Unlock()
 	if ctx, ok := cdpAllocatorCache[port]; ok {
-		return ctx, nil
+		if ctx.Err() == nil {
+			return ctx, nil
+		}
+		// The cached context is DEAD (the user closed/navigated the tab, or
+		// Chrome exited). The old code returned it forever, wedging every
+		// later browser_* call for the process lifetime. Evict + rebuild so
+		// a healthy tab recovers automatically.
+		if cancel := cdpCancelCache[port]; cancel != nil {
+			cancel()
+		}
+		delete(cdpAllocatorCache, port)
+		delete(cdpCancelCache, port)
 	}
 
 	wsURL, err := chromedpResolveWS(port)
@@ -291,7 +302,7 @@ func handleBrowserDOMOutline(callCtx context.Context, _ platform.Platform, param
 					if (el.id) sel = '#' + el.id;
 					else if (el.getAttribute('data-testid')) sel = '[data-testid="' + el.getAttribute('data-testid') + '"]';
 					else if (el.name) sel = el.tagName.toLowerCase() + '[name="' + el.name + '"]';
-					else sel = el.tagName.toLowerCase() + ':nth-of-type(' + ([...el.parentNode.children].filter(s => s.tagName === el.tagName).indexOf(el) + 1) + ')';
+					else { const sibs = el.parentNode ? [...el.parentNode.children] : [el]; sel = el.tagName.toLowerCase() + ':nth-of-type(' + (sibs.filter(s => s.tagName === el.tagName).indexOf(el) + 1) + ')'; }
 					out.push({
 						tag: el.tagName.toLowerCase(),
 						type: el.type || '',
@@ -334,15 +345,19 @@ func handleBrowserClick(callCtx context.Context, _ platform.Platform, params map
 	// level CDP call available — bind it through JS that calls
 	// .click() directly on the matched element. Same semantics for
 	// 99% of click-handlers (no synthetic event dispatch needed).
+	// JSON-encode the selector for a valid JS string literal — %q emits Go
+	// escapes (\xNN, \U........) that aren't all valid JavaScript and would
+	// silently break some selectors.
+	selJSON, _ := json.Marshal(selector)
 	js := fmt.Sprintf(`
 		(function() {
-			const el = document.querySelector(%q);
+			const el = document.querySelector(%s);
 			if (!el) return "ERR:not_found";
 			el.scrollIntoView({block:"center"});
 			el.click();
 			return "ok";
 		})()
-	`, selector)
+	`, string(selJSON))
 	var result string
 	if err := chromedp.Run(ctx, chromedp.Evaluate(js, &result)); err != nil {
 		return &Result{Text: fmt.Sprintf("browser_click(%q): %v", selector, err), IsError: true}, nil
@@ -374,9 +389,10 @@ func handleBrowserType(callCtx context.Context, _ platform.Platform, params map[
 	// on `input` (autocomplete etc), so this matches what a real
 	// keypress would do without simulating individual key codes.
 	jsonText, _ := json.Marshal(text)
+	selJSON, _ := json.Marshal(selector) // valid JS string literal (see browser_click)
 	js := fmt.Sprintf(`
 		(function() {
-			const el = document.querySelector(%q);
+			const el = document.querySelector(%s);
 			if (!el) return "ERR:not_found";
 			el.focus();
 			const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -386,7 +402,7 @@ func handleBrowserType(callCtx context.Context, _ platform.Platform, params map[
 			el.dispatchEvent(new Event("change", {bubbles: true}));
 			return "ok";
 		})()
-	`, selector, string(jsonText))
+	`, string(selJSON), string(jsonText))
 	var result string
 	if err := chromedp.Run(ctx, chromedp.Evaluate(js, &result)); err != nil {
 		return &Result{Text: fmt.Sprintf("browser_type(%q): %v", selector, err), IsError: true}, nil

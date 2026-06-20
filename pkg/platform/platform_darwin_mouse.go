@@ -29,7 +29,11 @@ func (p *darwinPlatform) CursorPosition() (Point, error) {
 
 // MouseMove warps the cursor to the supplied point. robotgo.Move is
 // instantaneous (no smoothing) — for human-like motion use MouseDrag
-// which calls MoveSmooth internally.
+// which calls MoveSmooth internally. Out-of-range coordinates are left
+// to the OS, which already clamps a CGWarpMouseCursorPosition to the
+// active display arrangement; a per-call clamp here was tried and
+// reverted because it only knew the primary display's size and so
+// snapped legitimate clicks on a secondary monitor back onto display 0.
 func (p *darwinPlatform) MouseMove(pt Point) error {
 	robotgo.Move(pt.X, pt.Y)
 	return nil

@@ -90,12 +90,23 @@ func handleTypeText(ctx context.Context, plat platform.Platform, params map[stri
 // clipboard is deferred so a panic mid-paste doesn't strand the
 // model's text on the user's clipboard. ctx (DD-2) is checked between
 // each step so a cancel during paste cleans up cleanly.
-func typeViaPaste(ctx context.Context, plat platform.Platform, text string) error {
-	if err := ctx.Err(); err != nil {
-		return err
+func typeViaPaste(ctx context.Context, plat platform.Platform, text string) (err error) {
+	if cerr := ctx.Err(); cerr != nil {
+		return cerr
 	}
 	snap := plat.ClipboardSnapshot()
-	defer func() { _ = plat.ClipboardRestore(snap) }()
+	defer func() {
+		// If restore fails, the just-typed text — which per macro docs can be
+		// a secret (<env:...>) — is left on the user's clipboard. Overwrite it
+		// so it can't leak to the next paste, and surface the failure instead
+		// of silently swallowing it.
+		if rerr := plat.ClipboardRestore(snap); rerr != nil {
+			_ = plat.ClipboardWrite("")
+			if err == nil {
+				err = fmt.Errorf("clipboard restore failed (cleared instead to avoid leaking typed text): %w", rerr)
+			}
+		}
+	}()
 	if err := ctx.Err(); err != nil {
 		return err
 	}

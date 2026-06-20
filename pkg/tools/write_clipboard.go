@@ -33,6 +33,12 @@ func handleWriteClipboard(_ context.Context, plat platform.Platform, params map[
 	if err != nil {
 		return &Result{Text: fmt.Sprintf("write_clipboard: %v", err), IsError: true}, nil
 	}
+	// Size cap (read_clipboard already caps reads): a model/macro can't push
+	// an arbitrarily large payload through the clipboard backend / memory.
+	const maxClipboardWrite = 256 * 1024
+	if len(text) > maxClipboardWrite {
+		return &Result{Text: fmt.Sprintf("write_clipboard: text too large (%d bytes, max %d)", len(text), maxClipboardWrite), IsError: true}, nil
+	}
 	if denied, deny := gateOrDeny(plat, "write_clipboard"); deny {
 		return denied, nil
 	}

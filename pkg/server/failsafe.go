@@ -81,13 +81,24 @@ func startFailsafeWatchdog(plat platform.Platform, cfg failsafeConfig) func() {
 // territory so monitoring tools that already split 0 / 1 / >1 land
 // it in the "operator action" bucket.
 func runFailsafe(ctx context.Context, plat platform.Platform, pollEvery, holdFor time.Duration, cornerPx int) {
-	bounds, err := plat.DisplayBounds(0)
-	if err != nil {
-		log.Printf("failsafe: cannot read primary display bounds (%v); watchdog disabled", err)
+	// Gather corners for EVERY display, not just the primary — otherwise
+	// slamming the cursor into a corner of a secondary monitor (the user's
+	// instinctive abort gesture) silently does nothing.
+	type cornerBox struct{ minX, minY, maxX, maxY int }
+	var boxes []cornerBox
+	n, _ := plat.DisplayCount()
+	if n < 1 {
+		n = 1
+	}
+	for i := 0; i < n; i++ {
+		if b, derr := plat.DisplayBounds(i); derr == nil {
+			boxes = append(boxes, cornerBox{b.Min.X, b.Min.Y, b.Max.X - 1, b.Max.Y - 1})
+		}
+	}
+	if len(boxes) == 0 {
+		log.Printf("failsafe: cannot read any display bounds; watchdog disabled")
 		return
 	}
-	maxX := bounds.Max.X - 1
-	maxY := bounds.Max.Y - 1
 
 	t := time.NewTicker(pollEvery)
 	defer t.Stop()
@@ -107,13 +118,25 @@ func runFailsafe(ctx context.Context, plat platform.Platform, pollEvery, holdFor
 			inCornerSince = time.Time{}
 			continue
 		}
-		if isInAnyCorner(pt, bounds.Min.X, bounds.Min.Y, maxX, maxY, cornerPx) {
+		inCorner := false
+		for _, b := range boxes {
+			if isInAnyCorner(pt, b.minX, b.minY, b.maxX, b.maxY, cornerPx) {
+				inCorner = true
+				break
+			}
+		}
+		if inCorner {
 			if inCornerSince.IsZero() {
 				inCornerSince = time.Now()
 				continue
 			}
 			if time.Since(inCornerSince) >= holdFor {
 				log.Printf("failsafe: cursor held in screen corner for %v — terminating metis-cu (exit 2)", holdFor)
+				// Release platform handles before the hard exit — os.Exit
+				// skips every deferred cleanup, which could otherwise strand
+				// the model's just-typed text (a secret) on the clipboard or
+				// leak OS handles / the CDP allocator.
+				_ = plat.Close()
 				os.Exit(2)
 			}
 			continue
