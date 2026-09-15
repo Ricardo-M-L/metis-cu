@@ -60,8 +60,8 @@ func TestSettleAndMaybeShot_ReturnScreenshotTrue(t *testing.T) {
 	if img == "" || mime == "" {
 		t.Fatalf("expected non-empty image+mime; got (%q, %q)", img, mime)
 	}
-	if mime != "image/png" {
-		t.Errorf("default mime should be image/png; got %q", mime)
+	if mime != "image/jpeg" {
+		t.Errorf("default mime should be image/jpeg; got %q", mime)
 	}
 	if p.shotCalled != 1 {
 		t.Errorf("Screenshot called %d times; want 1", p.shotCalled)

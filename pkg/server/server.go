@@ -62,7 +62,7 @@ func Run(opts Options) error {
 		cornerPx: cfg.Failsafe.CornerPx,
 	})
 	defer stopFailsafe()
-	return mcpserver.ServeStdio(srv)
+	return serveManagedStdio(srv, reg.Platform())
 }
 
 // build constructs the *MCPServer with all 25 tools registered and a

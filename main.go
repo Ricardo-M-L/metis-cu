@@ -23,25 +23,73 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/Ricardo-M-L/metis-cu/pkg/server"
 )
 
 const Version = "0.0.1-dev"
 
+const managedProtocolVersion = 1
+
+type description struct {
+	Name            string            `json:"name"`
+	Version         string            `json:"version"`
+	ProtocolVersion int               `json:"protocolVersion"`
+	Platform        string            `json:"platform"`
+	Arch            string            `json:"arch"`
+	Capabilities    []string          `json:"capabilities"`
+	Permissions     map[string]string `json:"permissions"`
+}
+
+func printDescription() error {
+	return json.NewEncoder(os.Stdout).Encode(description{
+		Name:            "metis-cu",
+		Version:         Version,
+		ProtocolVersion: managedProtocolVersion,
+		Platform:        runtime.GOOS,
+		Arch:            runtime.GOARCH,
+		Capabilities: []string{
+			"status",
+			"stop",
+			"end-turn",
+			"serialized-input",
+			"input-ownership",
+		},
+		Permissions: map[string]string{
+			"screenRecording": "runtime",
+			"accessibility":   "runtime",
+		},
+	})
+}
+
 func main() {
 	server.Version = Version
 
 	debug := flag.Bool("debug", false, "log MCP RPC frames to ~/.metis-cu/debug.log")
 	version := flag.Bool("version", false, "print version and exit")
+	describe := flag.Bool("describe", false, "print the side-effect-free managed helper descriptor")
+	jsonOutput := flag.Bool("json", false, "emit descriptor output as JSON")
 	flag.Parse()
 
 	if *version {
 		fmt.Println("metis-cu", Version)
 		return
+	}
+	if *describe {
+		if err := printDescription(); err != nil {
+			fmt.Fprintln(os.Stderr, "metis-cu:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *jsonOutput {
+		fmt.Fprintln(os.Stderr, "metis-cu: --json is only valid with --describe")
+		os.Exit(2)
 	}
 
 	if err := server.Run(server.Options{Debug: *debug}); err != nil {

@@ -51,7 +51,7 @@ func TestE2E_ListsAllTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
-	const expected = 29
+	const expected = 36
 	if got := len(resp.Tools); got != expected {
 		t.Fatalf("tools count = %d, want %d", got, expected)
 	}
@@ -89,7 +89,7 @@ func TestE2E_ListsAllTools(t *testing.T) {
 // state rather than the build:
 //
 //   - GUI session present (dev box, Windows CI runner): expect an
-//     ImageContent block with PNG data.
+//     ImageContent block with JPEG data (the default wire format).
 //   - Headless / permission-denied (Linux CI without DISPLAY, macOS CI
 //     without Screen Recording permission): expect IsError so the LLM
 //     can self-correct.
@@ -140,8 +140,8 @@ func TestE2E_Screenshot(t *testing.T) {
 			if img.Data == "" {
 				t.Errorf("image content has empty Data")
 			}
-			if img.MIMEType != "image/png" {
-				t.Errorf("image MIMEType = %q, want image/png", img.MIMEType)
+			if img.MIMEType != "image/jpeg" {
+				t.Errorf("image MIMEType = %q, want image/jpeg", img.MIMEType)
 			}
 			sawImage = true
 		}

@@ -125,7 +125,7 @@ func TestComputerBatch_PropagatesImage(t *testing.T) {
 	if res.Image == "" {
 		t.Error("expected last screenshot's image to propagate to batch result")
 	}
-	if res.MIMEType != "image/png" {
+	if res.MIMEType != "image/jpeg" {
 		t.Errorf("unexpected mime: %q", res.MIMEType)
 	}
 }
