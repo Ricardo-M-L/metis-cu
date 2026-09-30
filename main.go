@@ -24,15 +24,18 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 
+	"github.com/Ricardo-M-L/metis-cu/pkg/platform"
 	"github.com/Ricardo-M-L/metis-cu/pkg/server"
 )
 
-const Version = "0.0.1-dev"
+const Version = "0.0.2"
 
 const managedProtocolVersion = 1
 
@@ -46,8 +49,8 @@ type description struct {
 	Permissions     map[string]string `json:"permissions"`
 }
 
-func printDescription() error {
-	return json.NewEncoder(os.Stdout).Encode(description{
+func describe() description {
+	return description{
 		Name:            "metis-cu",
 		Version:         Version,
 		ProtocolVersion: managedProtocolVersion,
@@ -60,40 +63,96 @@ func printDescription() error {
 			"serialized-input",
 			"input-ownership",
 		},
-		Permissions: map[string]string{
-			"screenRecording": "runtime",
-			"accessibility":   "runtime",
-		},
-	})
+		Permissions: platform.PermissionStatus(),
+	}
 }
 
 func main() {
+	os.Exit(runCLI(os.Args[1:], os.Stdout, os.Stderr, server.Run, platform.RequestPermission))
+}
+
+// runCLI separates metadata and an explicit, user-initiated TCC request from
+// MCP startup. The request callback also lets tests avoid showing OS prompts.
+func runCLI(args []string, stdout, stderr io.Writer, serve func(server.Options) error, requestPermission func(string) error) int {
 	server.Version = Version
 
-	debug := flag.Bool("debug", false, "log MCP RPC frames to ~/.metis-cu/debug.log")
-	version := flag.Bool("version", false, "print version and exit")
-	describe := flag.Bool("describe", false, "print the side-effect-free managed helper descriptor")
-	jsonOutput := flag.Bool("json", false, "emit descriptor output as JSON")
-	flag.Parse()
+	flags := flag.NewFlagSet("metis-cu", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	debug := flags.Bool("debug", false, "log MCP RPC frames to ~/.metis-cu/debug.log")
+	version := flags.Bool("version", false, "print version and exit")
+	describeFlag := flags.Bool("describe", false, "print the side-effect-free managed helper descriptor")
+	permission := flags.String("request-permission", "", "request macOS accessibility or screen-recording permission")
+	jsonOutput := flags.Bool("json", false, "emit descriptor output as JSON")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "metis-cu: unexpected positional arguments")
+		return 2
+	}
+	permissionRequested := false
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == "request-permission" {
+			permissionRequested = true
+		}
+	})
+	if permissionRequested {
+		if *version || *describeFlag || *debug {
+			fmt.Fprintln(stderr, "metis-cu: --request-permission cannot be combined with --version, --describe, or --debug")
+			return 2
+		}
+		if *permission != "accessibility" && *permission != "screen-recording" {
+			fmt.Fprintln(stderr, "metis-cu: --request-permission must be accessibility or screen-recording")
+			return 2
+		}
+		if err := requestPermission(*permission); err != nil {
+			fmt.Fprintln(stderr, "metis-cu: request permission:", err)
+			return 1
+		}
+		current := describe()
+		if *jsonOutput {
+			if err := json.NewEncoder(stdout).Encode(current); err != nil {
+				fmt.Fprintln(stderr, "metis-cu: write descriptor:", err)
+				return 1
+			}
+			return 0
+		}
+		key := "accessibility"
+		if *permission == "screen-recording" {
+			key = "screenRecording"
+		}
+		if _, err := fmt.Fprintf(stdout, "%s: %s\n", *permission, current.Permissions[key]); err != nil {
+			fmt.Fprintln(stderr, "metis-cu: write permission status:", err)
+			return 1
+		}
+		return 0
+	}
 
 	if *version {
-		fmt.Println("metis-cu", Version)
-		return
-	}
-	if *describe {
-		if err := printDescription(); err != nil {
-			fmt.Fprintln(os.Stderr, "metis-cu:", err)
-			os.Exit(1)
+		if _, err := fmt.Fprintln(stdout, "metis-cu", Version); err != nil {
+			fmt.Fprintln(stderr, "metis-cu: write version:", err)
+			return 1
 		}
-		return
+		return 0
+	}
+	if *describeFlag {
+		if err := json.NewEncoder(stdout).Encode(describe()); err != nil {
+			fmt.Fprintln(stderr, "metis-cu: write descriptor:", err)
+			return 1
+		}
+		return 0
 	}
 	if *jsonOutput {
-		fmt.Fprintln(os.Stderr, "metis-cu: --json is only valid with --describe")
-		os.Exit(2)
+		fmt.Fprintln(stderr, "metis-cu: --json is only valid with --describe or --request-permission")
+		return 2
 	}
 
-	if err := server.Run(server.Options{Debug: *debug}); err != nil {
-		fmt.Fprintln(os.Stderr, "metis-cu:", err)
-		os.Exit(1)
+	if err := serve(server.Options{Debug: *debug}); err != nil {
+		fmt.Fprintln(stderr, "metis-cu:", err)
+		return 1
 	}
+	return 0
 }

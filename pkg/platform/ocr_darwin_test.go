@@ -37,10 +37,10 @@ func drawText(t *testing.T, w, h int, s string) image.Image {
 // a high-contrast English label, expect at least one OCRResult whose
 // Text contains the input word. This pins that
 //
-//   (a) cgo + Vision framework linking actually works
-//   (b) JSON envelope round-trips through ocr_darwin.m
-//   (c) bounding-box flip from bottom-left → top-left lands on the
-//       actual glyph (no negative coords, no off-by-image-height)
+//	(a) cgo + Vision framework linking actually works
+//	(b) JSON envelope round-trips through ocr_darwin.m
+//	(c) bounding-box flip from bottom-left → top-left lands on the
+//	    actual glyph (no negative coords, no off-by-image-height)
 //
 // Skipped on CI runners without the Vision framework available
 // (which is unusual for darwin — Vision ships with the OS) so a

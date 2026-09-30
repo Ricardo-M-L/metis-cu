@@ -7,6 +7,16 @@ it leaves 0.x.
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-09-30
+
+### Added
+
+- Report the current macOS Accessibility and Screen Recording permission state
+  in the managed helper descriptor without requesting access.
+- Add explicit `--request-permission accessibility|screen-recording` commands
+  for a user-initiated macOS permission request; `--json` returns the updated
+  managed helper descriptor.
+
 ### Added — Sprint 1 scaffold (2026-05-01)
 
 - Repo skeleton with `main.go`, `pkg/server`, `pkg/tools`,

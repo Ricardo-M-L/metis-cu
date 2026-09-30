@@ -42,15 +42,15 @@ import (
 // Kept as a set (rather than a slice) so lookups stay O(1) inside the
 // hot Tier() / FrontmostApp() path.
 var hostTerminalApps = map[string]struct{}{
-	"Terminal":   {}, // macOS Apple_Terminal
-	"iTerm2":     {},
-	"Ghostty":    {},
-	"WezTerm":    {},
+	"Terminal":    {}, // macOS Apple_Terminal
+	"iTerm2":      {},
+	"Ghostty":     {},
+	"WezTerm":     {},
 	"wezterm-gui": {}, // Linux process name some setups expose
-	"Alacritty":  {},
-	"kitty":      {},
-	"Hyper":      {},
-	"Tabby":      {},
+	"Alacritty":   {},
+	"kitty":       {},
+	"Hyper":       {},
+	"Tabby":       {},
 }
 
 var (

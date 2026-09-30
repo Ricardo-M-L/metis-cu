@@ -35,7 +35,7 @@ import (
 func init() {
 	addRegistration(func(r *Registry) {
 		r.register(Spec{
-			Name: "screenshot_annotated",
+			Name:        "screenshot_annotated",
 			Description: "Set-of-Marks screenshot: captures the active display, runs OCR to find every text region, overlays each with a numbered red box, and returns the annotated image PLUS a JSON mark→coord map. Use BEFORE clicking when you'd otherwise have to guess pixel coordinates. Once you have the marks, call `left_click` with the centre coord of the mark you want (the JSON includes `center_x` / `center_y` ready to copy). Cheaper than separate screenshot + find_text_on_screen + left_click sequence — one round-trip gives you the annotated view AND the mapping.",
 			Schema: map[string]any{
 				"type":                 "object",
@@ -231,4 +231,3 @@ func encodeAnnotatedPNG(img image.Image) (*bytes.Buffer, string, error) {
 	}
 	return &buf, "image/png", nil
 }
-

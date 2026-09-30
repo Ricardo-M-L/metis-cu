@@ -76,6 +76,13 @@ command = "metis-cu"
 
 Tools appear under `mcp__computer-use__screenshot`, `mcp__computer-use__left_click`, etc.
 
+On macOS, `metis-cu --describe --json` reports the current Accessibility and
+Screen Recording permission states without opening a prompt. A permission
+request can be made explicitly with `metis-cu --request-permission accessibility
+--json` or `metis-cu --request-permission screen-recording --json`. macOS still
+requires the user to approve access in System Settings; invoking either
+command does not grant access by itself.
+
 ## Platforms
 
 CI matrix (ubuntu-latest + macos-latest + windows-latest) builds & tests every commit. Each row reflects the production-quality state of that platform's input + screenshot + clipboard pipeline:
@@ -91,4 +98,4 @@ Native Wayland (without XWayland) is the only known gap — most distros still s
 
 ## License
 
-Apache-2.0
+Source-available, All Rights Reserved. See [LICENSE](LICENSE) for the terms.
