@@ -108,9 +108,12 @@ func build(opts Options) (*mcpserver.MCPServer, *tools.Registry, error) {
 		"metis-cu",
 		Version,
 		mcpserver.WithToolCapabilities(false),
+		mcpserver.WithResourceCapabilities(false, false),
 		mcpserver.WithPromptCapabilities(false),
 	)
 	registerPrompts(srv)
+	activity := &toolActivity{}
+	registerStatusResource(srv, activity)
 
 	for _, spec := range reg.Specs() {
 		spec := spec // capture for closure
@@ -128,7 +131,7 @@ func build(opts Options) (*mcpserver.MCPServer, *tools.Registry, error) {
 			Description:    spec.Description,
 			RawInputSchema: schemaBytes,
 		}
-		srv.AddTool(tool, makeHandler(reg, spec.Name))
+		srv.AddTool(tool, makeHandler(reg, spec.Name, activity))
 	}
 
 	_ = opts.Debug // reserved for future RPC frame logging
@@ -138,8 +141,10 @@ func build(opts Options) (*mcpserver.MCPServer, *tools.Registry, error) {
 // makeHandler binds one tool name to a closure that pulls arguments
 // off the CallToolRequest, dispatches via reg.Call, and shapes the
 // tools.Result into mcp-go's CallToolResult (text-only or text+image).
-func makeHandler(reg *tools.Registry, name string) mcpserver.ToolHandlerFunc {
+func makeHandler(reg *tools.Registry, name string, activity *toolActivity) mcpserver.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		activity.active.Add(1)
+		defer activity.active.Add(-1)
 		args := req.GetArguments()
 		res, err := reg.Call(ctx, name, args)
 		if err != nil {

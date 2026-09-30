@@ -7,6 +7,13 @@ it leaves 0.x.
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-09-30
+
+### Added
+
+- Expose the protocol-1 helper descriptor and conservative tool activity as
+  the MCP `metis-cu://status` resource.
+
 ## [0.0.2] - 2026-09-30
 
 ### Added

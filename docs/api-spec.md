@@ -67,3 +67,11 @@ Mirrors Claude Code's frontmost-app gating:
 - **full**: no restrictions. Most native apps.
 
 The tier is decided by `Platform.FrontmostApp()` at the start of every tool call. `request_access` returns the tier the user approved.
+
+## Managed status resource
+
+MCP clients can list and read `metis-cu://status` (`application/json`). It
+contains the same protocol-1 descriptor fields as `metis-cu --describe`, plus
+`lifecycle.state`. The state is `running` while a registered MCP tool handler
+is executing and `idle` when none is executing. It does not describe the host
+turn, ownership of OS input, or activity outside this helper process.

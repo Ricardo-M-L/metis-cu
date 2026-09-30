@@ -29,43 +29,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 
 	"github.com/Ricardo-M-L/metis-cu/pkg/platform"
 	"github.com/Ricardo-M-L/metis-cu/pkg/server"
 )
 
-const Version = "0.0.2"
-
-const managedProtocolVersion = 1
-
-type description struct {
-	Name            string            `json:"name"`
-	Version         string            `json:"version"`
-	ProtocolVersion int               `json:"protocolVersion"`
-	Platform        string            `json:"platform"`
-	Arch            string            `json:"arch"`
-	Capabilities    []string          `json:"capabilities"`
-	Permissions     map[string]string `json:"permissions"`
-}
-
-func describe() description {
-	return description{
-		Name:            "metis-cu",
-		Version:         Version,
-		ProtocolVersion: managedProtocolVersion,
-		Platform:        runtime.GOOS,
-		Arch:            runtime.GOARCH,
-		Capabilities: []string{
-			"status",
-			"stop",
-			"end-turn",
-			"serialized-input",
-			"input-ownership",
-		},
-		Permissions: platform.PermissionStatus(),
-	}
-}
+const Version = "0.0.3"
 
 func main() {
 	os.Exit(runCLI(os.Args[1:], os.Stdout, os.Stderr, server.Run, platform.RequestPermission))
@@ -112,7 +81,7 @@ func runCLI(args []string, stdout, stderr io.Writer, serve func(server.Options) 
 			fmt.Fprintln(stderr, "metis-cu: request permission:", err)
 			return 1
 		}
-		current := describe()
+		current := server.Describe()
 		if *jsonOutput {
 			if err := json.NewEncoder(stdout).Encode(current); err != nil {
 				fmt.Fprintln(stderr, "metis-cu: write descriptor:", err)
@@ -139,7 +108,7 @@ func runCLI(args []string, stdout, stderr io.Writer, serve func(server.Options) 
 		return 0
 	}
 	if *describeFlag {
-		if err := json.NewEncoder(stdout).Encode(describe()); err != nil {
+		if err := json.NewEncoder(stdout).Encode(server.Describe()); err != nil {
 			fmt.Fprintln(stderr, "metis-cu: write descriptor:", err)
 			return 1
 		}

@@ -34,11 +34,11 @@ func TestPermissionRequestProducesDescriptorWithoutStartingServer(t *testing.T) 
 			if code != 0 || requests != 1 || stderr.Len() != 0 {
 				t.Fatalf("exit=%d requests=%d stderr=%q", code, requests, &stderr)
 			}
-			var got description
+			var got server.Descriptor
 			if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
 				t.Fatalf("invalid descriptor: %v, output=%q", err, &stdout)
 			}
-			if got.Name != "metis-cu" || got.ProtocolVersion != managedProtocolVersion {
+			if got.Name != "metis-cu" || got.ProtocolVersion != server.ManagedProtocolVersion {
 				t.Fatalf("wrong protocol descriptor: %+v", got)
 			}
 			for _, name := range []string{"screenRecording", "accessibility"} {
@@ -58,9 +58,12 @@ func TestDescribeDoesNotRequestPermissionOrStartServer(t *testing.T) {
 	if code != 0 || stderr.Len() != 0 {
 		t.Fatalf("exit=%d stderr=%q", code, &stderr)
 	}
-	var got description
+	var got server.Descriptor
 	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
 		t.Fatalf("invalid descriptor: %v", err)
+	}
+	if got.Version != "0.0.3" {
+		t.Fatalf("descriptor version = %q, want 0.0.3", got.Version)
 	}
 	if got.Permissions["accessibility"] == "runtime" || got.Permissions["screenRecording"] == "runtime" {
 		t.Fatalf("descriptor still reports runtime: %+v", got.Permissions)
